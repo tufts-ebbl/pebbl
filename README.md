@@ -8,7 +8,7 @@
 PEBBL is the lab's tool for checking physiological recordings by eye: ECG, finger pulse (PPG), breathing,
 skin conductance and blood pressure. It shows each recording with a computer's marks on it (heartbeats, and
 stretches that look unusable), and a trained reviewer corrects them. Two reviewers check each recording
-independently, and an adjudicator reconciles them.
+independently, and a reconciler settles any disagreements.
 
 ## Research assistants: start here
 
