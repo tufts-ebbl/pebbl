@@ -1,0 +1,548 @@
+<title>PEBBL User Manual</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one readable column, a hex-logo masthead, Windows/Mac steps side by side that stack on phones. */
+:root{
+  --paper:#FBFCFD; --ink:#22282A; --muted:#55616A; --rule:#DCE3E8; --wash:#EEF4FA;
+  --blue:#2F7BC8; --green:#1A5532; --purple:#8C4799; --warn-bg:#FFF6E5; --warn-ink:#6B4500;
+  --kbd-bg:#FFFFFF; --code-bg:#F1F4F7;
+  --sans:"Source Sans 3","Segoe UI",system-ui,-apple-system,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",Menlo,Consolas,monospace;
+  --measure:46rem;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#13171A; --ink:#E4E9EC; --muted:#A3AFB7; --rule:#2C353B; --wash:#1B242C;
+  --blue:#7DB8F0; --green:#7CC79A; --purple:#C99AD6; --warn-bg:#2E2614; --warn-ink:#F2D29A;
+  --kbd-bg:#1E262C; --code-bg:#1C2328; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#13171A; --ink:#E4E9EC; --muted:#A3AFB7; --rule:#2C353B; --wash:#1B242C;
+  --blue:#7DB8F0; --green:#7CC79A; --purple:#C99AD6; --warn-bg:#2E2614; --warn-ink:#F2D29A;
+  --kbd-bg:#1E262C; --code-bg:#1C2328; color-scheme:dark}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.55;margin:0}
+.page{max-width:var(--measure);margin:0 auto;padding-inline:20px;padding-block:28px 64px}
+h1,h2,h3{line-height:1.2;text-wrap:balance;margin:0}
+h2{font-size:1.55rem;margin-top:2.6rem;padding-top:1rem;border-top:1px solid var(--rule)}
+h3{font-size:1.15rem;margin-top:1.6rem}
+p,ul,ol,table,figure,.pair,.note{margin:.7rem 0 0}
+ul,ol{padding-left:1.3rem}
+li+li{margin-top:.3rem}
+a{color:var(--blue);text-underline-offset:2px}
+a:focus-visible,summary:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+strong{font-weight:700}
+code,kbd,.path{font-family:var(--mono);font-size:.86em}
+code,.path{background:var(--code-bg);padding:.08em .32em;border-radius:3px;overflow-wrap:anywhere}
+kbd{background:var(--kbd-bg);border:1px solid var(--rule);border-bottom-width:2px;border-radius:4px;padding:.05em .4em;white-space:nowrap}
+pre{font-family:var(--mono);font-size:.86rem;background:var(--code-bg);padding:.7rem .85rem;border-radius:4px;overflow-x:auto;margin:.6rem 0 0;line-height:1.45}
+.label{font-family:var(--mono);font-size:.84em;font-weight:500;color:var(--purple)}
+
+/* Masthead */
+.mast{display:grid;grid-template-columns:96px minmax(0,1fr);gap:22px;align-items:center}
+.mast .logo{width:96px}
+.mast h1{font-size:2.3rem;letter-spacing:-.01em}
+.mast .full{color:var(--muted);margin-top:.25rem}
+.mast .tag{font-style:italic;margin-top:.15rem}
+.meta{margin-top:1.1rem;color:var(--muted);font-size:.92rem}
+
+/* Contents */
+nav.toc{margin-top:1.4rem;background:var(--wash);border-radius:6px;padding:.8rem 1rem}
+nav.toc ol{margin:.2rem 0 0;columns:2 15rem;column-gap:2rem}
+nav.toc li{break-inside:avoid}
+nav.toc .h{font-weight:700;font-size:.85rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+
+/* Windows / Mac pairs */
+.pair{display:grid;grid-template-columns:repeat(auto-fit,minmax(15rem,1fr));gap:12px}
+.os{border:1px solid var(--rule);border-radius:6px;padding:.6rem .85rem .75rem;min-width:0}
+.os .os-name{font-weight:700;font-size:.8rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.os p:first-of-type{margin-top:.25rem}
+
+/* Setup steps: a real sequence, so numbered */
+ol.steps{counter-reset:step;list-style:none;padding:0}
+ol.steps>li{counter-increment:step;position:relative;padding-left:2.3rem;margin-top:1.3rem}
+ol.steps>li::before{content:counter(step);position:absolute;left:0;top:.05rem;width:1.6rem;height:1.6rem;border-radius:50%;
+  background:var(--ink);color:var(--paper);font-weight:700;font-size:.9rem;display:grid;place-items:center}
+ol.steps>li>h3{margin-top:0}
+
+.note{background:var(--warn-bg);color:var(--warn-ink);border-radius:6px;padding:.65rem .9rem}
+.note strong{color:inherit}
+
+figure{margin-inline:0}
+figure img{display:block;width:auto;max-width:100%;height:auto;border:1px solid var(--rule);border-radius:4px;background:#fff}
+ul.paths{list-style:none;padding:0}
+ul.paths li{overflow-wrap:anywhere}
+figcaption{font-size:.9rem;color:var(--muted);margin-top:.35rem}
+
+.table-wrap{overflow-x:auto;margin-top:.7rem}
+table{border-collapse:collapse;width:100%;font-size:.95rem;margin:0}
+th,td{text-align:left;vertical-align:top;padding:.45rem .6rem;border-bottom:1px solid var(--rule)}
+th{font-size:.8rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700}
+td:first-child{font-weight:700;white-space:nowrap}
+
+.chan{margin-top:1.6rem}
+.chan h3{display:flex;align-items:baseline;gap:.6rem;flex-wrap:wrap}
+.chan h3 .what{font-weight:400;font-size:.95rem;color:var(--muted)}
+.dodont{display:grid;grid-template-columns:repeat(auto-fit,minmax(15rem,1fr));gap:12px;margin-top:.6rem}
+.dodont>div{min-width:0}
+.dodont .h{font-weight:700;font-size:.8rem;letter-spacing:.07em;text-transform:uppercase}
+.dodont .mark .h{color:var(--blue)}
+.dodont .keep .h{color:var(--green)}
+.dodont ul{margin-top:.25rem}
+
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);color:var(--muted);font-size:.9rem}
+
+@media (max-width:520px){
+  body{font-size:16px}
+  .mast{grid-template-columns:72px minmax(0,1fr);gap:14px}
+  .mast .logo{width:72px}
+  .mast h1{font-size:1.8rem}
+}
+@media print{
+  body{font-size:10.5pt;background:#fff;color:#000}
+  .page{max-width:none;padding:0}
+  h2{break-after:avoid;margin-top:1.6rem}
+  pre{white-space:pre-wrap;overflow-wrap:anywhere}
+  figure.small img{max-width:4.6in}
+  figure img{max-height:4.2in}
+  h3{break-after:avoid}
+  figure,.os,.note,tr,.chan{break-inside:avoid}
+  nav.toc{background:none;border:1px solid #ccc}
+  a{color:#000;text-decoration:none}
+}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+</style>
+
+<div class="page">
+<header class="mast">
+  <div class="logo" id="logo" role="img" aria-label="PEBBL logo: a hexagon of pebbles with a blue heartbeat trace and the word pebbl"></div>
+  <div>
+    <h1>PEBBL user manual</h1>
+    <p class="full">Physiology in the Emotion, Brain &amp; Behavior Lab</p>
+    <p class="tag">Please Eyeball Before Believing Labels.</p>
+  </div>
+</header>
+<p class="meta">For research assistants. Updated 4 October 2026. If anything here doesn't match what you see, tell the lab staff.</p>
+
+<nav class="toc" aria-label="Contents">
+  <span class="h">Contents</span>
+  <ol>
+    <li><a href="#what">What PEBBL does</a></li>
+    <li><a href="#setup">Set up your computer (once)</a></li>
+    <li><a href="#before">Before your first real session</a></li>
+    <li><a href="#signals">The signals in plain words</a></li>
+    <li><a href="#session">A review session, start to finish</a></li>
+    <li><a href="#channels">Channel by channel</a></li>
+    <li><a href="#certify">Get certified</a></li>
+    <li><a href="#step3">Step 3: reconciling two reviews</a></li>
+    <li><a href="#help">When something goes wrong</a></li>
+  </ol>
+</nav>
+
+<section id="what">
+<h2>1. What PEBBL does</h2>
+<p>Our studies record several body signals at once: heartbeat, finger pulse, breathing, sweat and blood pressure. A computer finds the heartbeats and flags stretches that look unusable, but it makes mistakes. PEBBL shows you each recording with the computer's marks on it, and you check them by eye and fix them. Two research assistants check each recording separately, and a reconciler then settles any disagreements.</p>
+<p>PEBBL never changes the recordings. It saves your marks in a separate file next to the recording on Box, named with your initials.</p>
+<p>The work comes in three steps, which you pick in PEBBL's form:</p>
+<ul>
+  <li><strong>Step 1: Build ECG QRS template.</strong> Once per participant, before you review their ECG. You correct 20 seconds of heartbeats, and PEBBL uses them to find heartbeats in the rest of the recording.</li>
+  <li><strong>Step 2: Review a channel.</strong> Most of your work: one signal (a "channel") of one run at a time.</li>
+  <li><strong>Step 3: Reconcile two reviewers.</strong> For reconcilers only.</li>
+</ul>
+</section>
+
+<section id="setup">
+<h2>2. Set up your computer (once)</h2>
+<p>Allow about 30 minutes, mostly waiting. You need an internet connection and permission to install programs. On a lab computer, ask the lab staff if an installer is blocked. Wherever these steps say <span class="path">YOU</span>, use your own username on that computer.</p>
+
+<ol class="steps">
+<li>
+  <h3>Install Python 3.11</h3>
+  <p>Python is the programming language PEBBL is written in. You won't need to write any code.</p>
+  <div class="pair">
+    <div class="os"><div class="os-name">Windows</div>
+      <p>Open <a href="https://www.python.org/downloads/release/python-3119/">python.org/downloads/release/python-3119</a>, scroll to <em>Files</em>, and download <strong>Windows installer (64-bit)</strong>. Run it. On its first screen, tick <strong>Add python.exe to PATH</strong>, then click <strong>Install Now</strong>.</p></div>
+    <div class="os"><div class="os-name">Mac</div>
+      <p>Open the same page and download <strong>macOS 64-bit universal2 installer</strong>. Open it and click through the installer.</p></div>
+  </div>
+  <p>Use 3.11 even if a newer Python exists: PEBBL's parts are matched to it. Having other versions installed too is fine.</p>
+</li>
+<li>
+  <h3>Install Git</h3>
+  <p>Git downloads PEBBL and keeps it up to date.</p>
+  <div class="pair">
+    <div class="os"><div class="os-name">Windows</div>
+      <p>Download Git from <a href="https://git-scm.com/download/win">git-scm.com/download/win</a>, run it, and accept every default (keep clicking <strong>Next</strong>, then <strong>Install</strong>).</p></div>
+    <div class="os"><div class="os-name">Mac</div>
+      <p>Open <strong>Terminal</strong> (press <kbd>⌘</kbd> <kbd>Space</kbd>, type <em>Terminal</em>, press <kbd>Return</kbd>). Type <code>git --version</code> and press <kbd>Return</kbd>. If a window offers to install the command line developer tools, click <strong>Install</strong>.</p></div>
+  </div>
+</li>
+<li>
+  <h3>Set up Box Drive</h3>
+  <p>If the computer doesn't have Box Drive yet, install it from <a href="https://www.box.com/resources/downloads">box.com/resources/downloads</a> and sign in with your Tufts account. Then check that you can open the lab's physio folder:</p>
+  <ul class="paths">
+    <li><strong>Windows:</strong> <span class="path">C:\Users\YOU\Box\DATA\Processed\physioProcessing\derivatives</span></li>
+    <li><strong>Mac:</strong> Finder sidebar → <strong>Box</strong> → <span class="path">DATA/Processed/physioProcessing/derivatives</span></li>
+  </ul>
+  <p>If you can't see the <span class="path">DATA</span> folder, ask the lab staff for access.</p>
+</li>
+<li>
+  <h3>Download PEBBL</h3>
+  <div class="pair">
+    <div class="os"><div class="os-name">Windows</div>
+      <p>Open <strong>PowerShell</strong>: Start menu, type <em>PowerShell</em>, press <kbd>Enter</kbd>.</p></div>
+    <div class="os"><div class="os-name">Mac</div>
+      <p>Open <strong>Terminal</strong>: press <kbd>⌘</kbd> <kbd>Space</kbd>, type <em>Terminal</em>, press <kbd>Return</kbd>.</p></div>
+  </div>
+  <p>Paste these two lines, pressing <kbd>Enter</kbd> (<kbd>Return</kbd> on a Mac) after each:</p>
+  <pre>cd ~
+git clone https://github.com/tufts-ebbl/pebbl.git</pre>
+  <p>This makes a folder called <span class="path">pebbl</span> in your home folder. <strong>Leave it there.</strong> Don't move it into OneDrive, iCloud, Box or a synced Desktop or Documents folder: they would try to sync PEBBL's 1&nbsp;GB of parts.</p>
+</li>
+<li>
+  <h3>Run the one-time setup</h3>
+  <div class="pair">
+    <div class="os"><div class="os-name">Windows</div>
+      <p>In File Explorer, open <span class="path">C:\Users\YOU\pebbl</span> and double-click <strong>Set up PEBBL.bat</strong>.</p></div>
+    <div class="os"><div class="os-name">Mac</div>
+      <p>In Terminal, paste this and press <kbd>Return</kbd>:</p>
+      <pre>bash ~/pebbl/setup_pebbl.sh</pre></div>
+  </div>
+  <p>A window shows progress for 5 to 15 minutes and ends with <em>PEBBL is set up</em>. If it ends with <em>Setup didn't finish</em>, take a photo of the window and send it to the lab staff.</p>
+</li>
+<li>
+  <h3>Make a working folder</h3>
+  <p>Make an empty folder called <span class="path">PhysioWorking</span> in your home folder (<span class="path">C:\Users\YOU\PhysioWorking</span>, or <span class="path">/Users/YOU/PhysioWorking</span> on a Mac). While you work, PEBBL copies one participant's files here, and it deletes the copy once your work is safely back on Box.</p>
+</li>
+<li>
+  <h3>Start PEBBL</h3>
+  <div class="pair">
+    <div class="os"><div class="os-name">Windows</div>
+      <p>Double-click <strong>Start PEBBL.bat</strong> in the <span class="path">pebbl</span> folder. For a desktop shortcut, right-click it → <strong>Send to</strong> → <strong>Desktop (create shortcut)</strong>.</p></div>
+    <div class="os"><div class="os-name">Mac</div>
+      <p>Double-click <strong>Start PEBBL.command</strong> in the <span class="path">pebbl</span> folder (Finder → <strong>Go</strong> → <strong>Home</strong> → <span class="path">pebbl</span>). To keep it handy, drag it to the right-hand end of your Dock.</p></div>
+  </div>
+  <p>Each time, PEBBL first checks for updates, then opens its form. A text window (the <strong>terminal</strong>) stays open behind the form, and PEBBL writes notes there during your session. <strong>Don't close it</strong> until it says <em>PEBBL has closed</em>.</p>
+</li>
+<li>
+  <h3>Try the demo</h3>
+  <p>In the form, tick <strong>Use synthetic demo data</strong>, type your initials, choose <strong>Step 2</strong> and click <strong>Start</strong>. You get made-up practice data with no real participant in it, so explore freely: nothing you do here is kept.</p>
+</li>
+</ol>
+
+<h3>If setup goes wrong</h3>
+<div class="table-wrap"><table>
+  <thead><tr><th>You see</th><th>What to do</th></tr></thead>
+  <tbody>
+    <tr><td>Python 3.11 isn't installed</td><td>Install it as in step 1. On Windows, use the python.org installer, not the Microsoft Store version.</td></tr>
+    <tr><td>git is not recognized</td><td>Install Git (step 2), then close PowerShell or Terminal and open it again.</td></tr>
+    <tr><td>Couldn't update PEBBL</td><td>Usually no internet connection. PEBBL still starts with the version you have; tell the lab staff if it keeps happening.</td></tr>
+    <tr><td>Mac: Start PEBBL.command won't open</td><td>Run <code>bash ~/pebbl/setup_pebbl.sh</code> again; it makes the file runnable.</td></tr>
+    <tr><td>Anything else</td><td>Take a photo of the window and send it to the lab staff.</td></tr>
+  </tbody>
+</table></div>
+</section>
+
+<section id="before">
+<h2>3. Before your first real session</h2>
+<ul>
+  <li><strong>Get certified</strong> on the practice participant first (<a href="#certify">section 7</a>). PEBBL scores your practice against an answer key and shows you what to fix.</li>
+  <li><strong>Use the same initials every time:</strong> 2 to 4 letters, such as <code>jkl</code>. They name your files. The first time you use them, PEBBL asks you to confirm them. If it warns that <code>sub</code> looks like the start of a subject ID, check what you typed.</li>
+  <li><strong>Know your assignment.</strong> The lab staff assign participant, run and channel in the Google tracking spreadsheet. Set that channel to <em>in progress</em> when you start and <em>finished</em> when you finish. PEBBL reminds you at both points.</li>
+  <li><strong>Protect the data.</strong> These recordings come from real people. Don't screenshot them or share them outside the lab, and keep them in the working folder PEBBL manages.</li>
+</ul>
+</section>
+
+<section id="signals">
+<h2>4. The signals in plain words</h2>
+<p>You mark two kinds of things. <strong>Peaks</strong> are single points, one per heartbeat or pulse. <strong>Bad stretches</strong> are spans of time where a signal can't be trusted. A stretch you leave unmarked in a finished review counts as checked and clean.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Channel</th><th>What it is</th><th>What you mark</th></tr></thead>
+  <tbody>
+    <tr><td>ECG</td><td>The heart's electrical activity, from stickers on the chest. Each heartbeat makes one tall, sharp spike: the <strong>R peak</strong>.</td><td>A peak on every R peak</td></tr>
+    <tr><td>PPG</td><td>The pulse in a fingertip, from the CareTaker finger cuff. Each heartbeat makes one smooth wave, reaching the finger a fraction of a second after the R peak.</td><td>A peak on every pulse</td></tr>
+    <tr><td>RSP</td><td>Breathing, from a stretchy belt around the torso. One rise and fall per breath.</td><td>Bad stretches</td></tr>
+    <tr><td>EDA</td><td>Skin conductance: tiny changes in sweat on the hand. Smooth rises lasting a few seconds are real responses.</td><td>Bad stretches</td></tr>
+    <tr><td>SBP, DBP</td><td>Blood pressure, measured at every heartbeat by the finger cuff: the upper number (systolic) and the lower (diastolic), in mmHg.</td><td>Bad stretches</td></tr>
+    <tr><td>Event</td><td>Which part of the task was running: 0 is outside the task, other numbers are task phases.</td><td>Nothing (context only)</td></tr>
+  </tbody>
+</table></div>
+<p>Some channels also show a <strong>guide row</strong> underneath: another signal shown for context, which you can't mark. Section 6 says how to use each one.</p>
+</section>
+
+<section id="session">
+<h2>5. A review session, start to finish</h2>
+
+<h3>Fill in the form</h3>
+<figure class="small">
+  <img src="img/form.png" alt="PEBBL's form with Step 2 selected, a Box path, subject 001, run 1, channel ECG and initials abc." width="640" height="569">
+  <figcaption>The form, ready for an ECG review of participant 001, run 1.</figcaption>
+</figure>
+<ul>
+  <li><strong>Step:</strong> usually <em>Step 2: Review a channel</em>.</li>
+  <li><strong>Box derivatives path:</strong> click <strong>Browse</strong> and choose the <span class="path">derivatives</span> folder from setup step 3. PEBBL remembers it.</li>
+  <li><strong>Subject</strong>, <strong>Run</strong> and <strong>Channel to review:</strong> from your assignment. <span class="path">1</span>, <span class="path">001</span> and <span class="path">sub-001</span> all work as the subject.</li>
+  <li><strong>Local working folder:</strong> your <span class="path">PhysioWorking</span> folder.</li>
+  <li><strong>Your initials.</strong></li>
+  <li><strong>Options:</strong> leave them as they start. Don't tick <em>Show lab-staff options</em>.</li>
+</ul>
+<p>Click <strong>Start</strong>. PEBBL copies the participant's files to your working folder and opens the viewer. <strong>Read the notes in the terminal window:</strong> they say what's already marked and anything special about this recording.</p>
+
+<h3>Find your way around the viewer</h3>
+<figure>
+  <img src="img/ecg_viewer.png" alt="The PEBBL viewer showing 20 seconds of ECG with a blue peak_ecg mark on every R peak, and the annotation bar with its label list at the top." width="1280" height="720">
+  <figcaption>An ECG review in annotation mode. Each blue line is a peak mark. The label list at the top left says which kind of mark a drag will make: here it's on <span class="label">bad_ecg</span>, so switch it to <span class="label">peak_ecg</span> before adding peaks.</figcaption>
+</figure>
+<div class="table-wrap"><table>
+  <thead><tr><th>To</th><th>Do this</th></tr></thead>
+  <tbody>
+    <tr><td>Page through the run</td><td><kbd>Shift</kbd> + <kbd>→</kbd> moves one full screen, <kbd>→</kbd> a quarter. Or drag the scroll bar, or click the overview strip at the very bottom.</td></tr>
+    <tr><td>Start marking</td><td>Press <kbd>a</kbd> for <strong>annotation mode</strong>. A bar appears with a label list.</td></tr>
+    <tr><td>Read an exact value</td><td>Press <kbd>x</kbd>, then hover. The value and time show at the bottom.</td></tr>
+    <tr><td>Hide the task markers</td><td>Press <kbd>e</kbd>.</td></tr>
+    <tr><td>See every shortcut</td><td>Click the <strong>?</strong> button in the toolbar.</td></tr>
+  </tbody>
+</table></div>
+
+<h3>Add, delete and move marks</h3>
+<p class="note"><strong>Check the label before every drag.</strong> The label list often starts on a bad-stretch label such as <span class="label">bad_ecg</span>. A drag made with the wrong label makes the wrong kind of mark.</p>
+<ul>
+  <li><strong>Add a peak:</strong> choose the peak label (<span class="label">peak_ecg</span> or <span class="label">peak_ppg</span>) and drag a small box over the top of the wave. PEBBL saves the mark at the highest point inside your box.</li>
+  <li><strong>Delete a peak:</strong> with the peak label chosen, drag a small box over the mark (the two merge into one box), click the box, then right-click it.</li>
+  <li><strong>Move a peak:</strong> delete it, then add a new one. <strong>Never drag a new box over a mark you want to keep:</strong> the two merge, and one is lost.</li>
+  <li><strong>Mark a bad stretch:</strong> choose the channel's bad label (<span class="label">bad_ecg</span>, <span class="label">bad_ppg</span>, <span class="label">bad_rsp</span>, <span class="label">bad_eda</span>, <span class="label">bad_sbp</span> or <span class="label">bad_dbp</span>) and drag across the stretch. Drag its edges to resize it; right-click it to delete it.</li>
+</ul>
+<figure>
+  <img src="img/eda_viewer.png" alt="An EDA review: a shaded bad_eda stretch covers a sudden square drop in the EDA trace; a smooth rise a few seconds later is left unmarked. The breathing guide row is underneath." width="1280" height="720">
+  <figcaption>A bad stretch over an EDA artifact: the signal drops and snaps back, as when an electrode lifts. The smooth rise near 31 s is a real response, so it stays unmarked. The breathing (RSP) guide row is underneath.</figcaption>
+</figure>
+
+<h3>Close the viewer and save</h3>
+<figure class="small">
+  <img src="img/summary.png" alt="The Session summary window: changes this session, one thing to check, a comments box, the finished checkbox, and Go back, Discard and Save buttons." width="548" height="267">
+  <figcaption>The session summary appears when you close the viewer.</figcaption>
+</figure>
+<ul>
+  <li><strong>Read what it asks you to check,</strong> such as an unusual gap between beats. Click <strong>Go back to the viewer</strong> to look. Leaving a flagged spot as it is is fine if the signal really looks like that.</li>
+  <li><strong>Comments:</strong> note anything odd for the lab staff.</li>
+  <li><strong>I've finished reviewing this for this run:</strong> tick it only when you've checked the whole run, start to end, including the parts before and after the task.</li>
+  <li><strong>Save.</strong> <em>Discard</em> throws away this session's changes and keeps your earlier saved work.</li>
+</ul>
+<p>PEBBL then copies your file back to Box, checks it arrived, and deletes the local copy. Wait for <em>PEBBL has closed</em> before closing the terminal window, then update the tracking spreadsheet.</p>
+<p><strong>You can stop partway.</strong> Save without ticking <em>finished</em>. Next time, start PEBBL with the same participant, run, channel and initials, and it picks up where you left off.</p>
+</section>
+
+<section id="channels">
+<h2>6. Channel by channel</h2>
+
+<div class="chan">
+<h3>ECG <span class="what">Peaks on every R peak</span></h3>
+<p><strong>Step 1 first,</strong> once per participant. PEBBL shows 20 seconds of ECG with the computer's R peaks. Fix them and close the window. A preview then shows your beats as gray lines with their average in black. Click <strong>Approve Template</strong> if the beats line up. If they're messy, click <strong>Try a Different Window</strong> and run Step 1 again with <em>Template window start</em> set to 20 (then 40, and so on).</p>
+<div class="dodont">
+  <div class="mark"><div class="h">Fix</div><ul>
+    <li>Add a peak on any heartbeat without one.</li>
+    <li>Delete peaks on T waves (the rounder bump after each beat) or on noise.</li>
+    <li>Mark <span class="label">bad_ecg</span> only where you can't tell where the R peaks are. Peaks inside a bad stretch are dropped automatically.</li></ul></div>
+  <div class="keep"><div class="h">Leave alone</div><ul>
+    <li>Premature beats: an early, sometimes odd-looking beat is real.</li>
+    <li>Natural changes in heart rate.</li></ul></div>
+</div>
+<p>The finger-pulse (PPG) guide row is <strong>off</strong> under ECG. You can turn it on in the form, but only for counting beats, never for deciding where an R peak goes: the pulse arrives a different time after each R peak in every run.</p>
+</div>
+
+<div class="chan">
+<h3>PPG <span class="what">Peaks on every pulse, in a session of their own</span></h3>
+<div class="dodont">
+  <div class="mark"><div class="h">Fix</div><ul>
+    <li><strong>To add a peak, drag a box over the whole top of the pulse,</strong> both humps if it has two. PEBBL puts the mark on the highest point.</li>
+    <li>Delete peaks in dropouts: low, smooth arcs with no clear pulse.</li>
+    <li>Move marks the summary lists as <em>not on a crest</em> (they're on a slope) onto a crest.</li></ul></div>
+  <div class="keep"><div class="h">Leave alone</div><ul>
+    <li>A mark on either hump of a two-humped pulse. Don't move marks from one hump to the other.</li>
+    <li>Never add a peak where you can't see a pulse, even if the rhythm says one should be there.</li></ul></div>
+</div>
+<p>The computer's dropouts start marked as <span class="label">bad_ppg</span>, and peaks inside them aren't loaded. Delete or shrink a marked stretch if the pulse there is clearly fine.</p>
+</div>
+
+<div class="chan">
+<h3>RSP <span class="what">Bad stretches only</span></h3>
+<div class="dodont">
+  <div class="mark"><div class="h">Mark bad</div><ul>
+    <li>Only where the belt stopped recording: a flat line with no breaths.</li></ul></div>
+  <div class="keep"><div class="h">Leave alone</div><ul>
+    <li><strong>If you can see breaths, it's not bad:</strong> pauses, breath holds, sighs and shallow breathing are all real.</li></ul></div>
+</div>
+<p>The review starts with the computer's flags; check each one. The EDA guide row underneath helps: a rise in EDA 1 to 3 seconds after a big breath shows the breath was real. Never mark RSP bad because of EDA.</p>
+</div>
+
+<div class="chan">
+<h3>EDA <span class="what">Bad stretches only</span></h3>
+<div class="dodont">
+  <div class="mark"><div class="h">Mark bad</div><ul>
+    <li>Sudden drops or jumps, as when an electrode lifts.</li>
+    <li>Sharp spikes, and stretches that go flat.</li>
+    <li>Brief artifacts: the computer misses anything shorter than about 5 seconds.</li></ul></div>
+  <div class="keep"><div class="h">Leave alone</div><ul>
+    <li>Real responses: a smooth rise over 1 to 3 seconds, then a slow decline.</li></ul></div>
+</div>
+<p>The breathing guide row underneath helps: a rise right after a big breath is a real response, not bad signal. Mark EDA bad only where the EDA itself is unusable.</p>
+</div>
+
+<div class="chan">
+<h3>SBP and DBP <span class="what">Bad stretches only</span></h3>
+<div class="dodont">
+  <div class="mark"><div class="h">Mark bad</div><ul>
+    <li>Sudden, implausible spikes.</li>
+    <li>A value held flat for a long time (the cuff recalibrating).</li></ul></div>
+  <div class="keep"><div class="h">Leave alone</div><ul>
+    <li>The computer's marks on blank stretches with no reading, including short ones under 2 seconds: they're gaps between readings.</li>
+    <li>BP where the terminal says pulse samples were <em>lost in transfer</em>: the cuff still measured it.</li></ul></div>
+</div>
+<p>The review starts with the computer's marks: no reading, values out of range, SBP less than 10 above DBP, and no usable finger pulse. The finger-pulse guide row underneath shows why the last kind matters: where there's no usable pulse, the pressure values aren't real.</p>
+</div>
+
+<p>EMG and finger temperature aren't collected yet, so PEBBL leaves them out.</p>
+</section>
+
+<section id="certify">
+<h2>7. Get certified</h2>
+<p>Before you work on real data, you practice on <strong>participant 990</strong>. It's a made-up recording: a computer simulated every channel, so no real person is in it. The computer's marks on it include deliberate mistakes, and a few spots look odd but are real. PEBBL keeps an <strong>answer key</strong> with it, the gold standard for where every peak and bad stretch belongs. The key is exact because the recording was built from it. Each time you save a practice review, PEBBL compares your marks with the key.</p>
+<ol class="steps">
+<li>
+  <h3>Tick <em>Practice for certification</em></h3>
+  <p>It's near the top of the form. PEBBL fills in subject 990 and uses the practice folder on Box. Keep your usual Box derivatives path, working folder and initials. Step 3 isn't part of practice.</p>
+</li>
+<li>
+  <h3>Build the ECG template (Step 1)</h3>
+  <p>As in <a href="#channels">section 6</a>. Step 1 isn't scored, but your Step 2 heartbeats start from it.</p>
+</li>
+<li>
+  <h3>Review each assigned channel (Step 2)</h3>
+  <p>The lab staff tell you which runs and channels to practice. Review as you would real data, and save.</p>
+</li>
+<li>
+  <h3>Read your score</h3>
+  <p>After you save, a score window opens. Each channel gets <strong>PASS</strong> or <strong>NOT YET</strong>. Each <strong>FIX</strong> line says what's wrong and where, in seconds from the start of the run.</p>
+  <figure class="small">
+    <img src="img/practice_report.png" alt="The Practice score window for run 1 ECG: ECG NOT YET with two FIX lines about a premature beat at 94.5 s that has no mark; ECG bad stretches PASS; overall NOT YET; a Compare with the answer key button." width="640" height="400">
+    <figcaption>This trainee deleted the mark on a premature beat at 94.5 s. The beat is real, so the mark should stay.</figcaption>
+  </figure>
+</li>
+<li>
+  <h3>Compare with the answer key</h3>
+  <p>Click <strong>Compare with the answer key</strong> to open the viewer with your marks and the key's together. Labels ending <span class="label">_agree</span> are where you match the key. Labels ending <span class="label">_only_key</span> are marks you missed, and labels ending in your initials are marks the key doesn't have. This view is only for looking: nothing you change in it is saved.</p>
+</li>
+<li>
+  <h3>Fix and save again</h3>
+  <p>Start Step 2 again for the same run and channel. PEBBL picks up from your last save. Fix the FIX lines, save, and repeat until the channel passes.</p>
+</li>
+</ol>
+
+<h3>What counts as a pass</h3>
+<div class="table-wrap"><table>
+  <thead><tr><th>Marks</th><th>To pass</th></tr></thead>
+  <tbody>
+    <tr><td>Peaks (ECG, PPG)</td><td>Every heartbeat or pulse has a mark within 20 ms (ECG) or 30 ms (PPG) of the key's, and there are no extra marks. On a two-humped pulse, either hump counts. Beats inside a stretch you correctly marked bad don't need marks.</td></tr>
+    <tr><td>Bad stretches (all channels)</td><td>At least 80% of each real artifact is marked bad. Real signal that looks odd, and the computer's mistaken marks, are no more than 25% marked. In all, no more than 2 seconds are marked bad where the signal is fine.</td></tr>
+  </tbody>
+</table></div>
+<p>When every channel you practiced passes, tell the lab staff. Your score is also saved in your session log, so they can check it there.</p>
+</section>
+
+<section id="step3">
+<h2>8. Step 3: reconciling two reviews</h2>
+<p>For reconcilers. Choose <strong>Step 3</strong>, the run and channel, your own initials, and the two reviewers' initials. Each mark shows with one of three labels: agreed by both (<span class="label">_agree</span>), only the first reviewer, or only the second. Delete marks you don't believe, add anything both missed using the <span class="label">_added</span> label, and leave agreed marks alone. Save as usual. For PPG, two marks on one pulse must be fixed before PEBBL lets you save.</p>
+</section>
+
+<section id="help">
+<h2>9. When something goes wrong</h2>
+<ul>
+  <li><strong>Tell the lab staff:</strong> what you were doing (participant, run, channel, step), plus a photo of the window.</li>
+  <li><strong>PEBBL keeps a session log</strong> next to your file on Box, ending in <span class="path">_annotations_YOURINITIALS.log</span>. The lab staff can read what happened there.</li>
+  <li><strong>Closed a window by accident?</strong> Your last save is safe; unsaved changes are lost. Start again and PEBBL resumes from your last save.</li>
+  <li><strong>PEBBL says files from an earlier session never reached Box:</strong> answer <code>y</code> to copy them to Box.</li>
+  <li><strong>A message says <span class="path">processing_log.csv</span> is open:</strong> close it in Excel. Your marks are already saved.</li>
+</ul>
+</section>
+
+<footer>PEBBL: Physiology in the Emotion, Brain &amp; Behavior Lab, Tufts University. Please Eyeball Before Believing Labels.</footer>
+</div>
+
+<script>
+(function(){
+var NS="http://www.w3.org/2000/svg",S3=Math.sqrt(3),uid=0,INK="#22282A",GAP="#6B6B67",BLUE="#3E8EDE",SOLID="stroke-dasharray:none;stroke-dashoffset:0;animation:none;transition:none;stroke-linejoin:round;stroke-linecap:round;stroke-miterlimit:10;vector-effect:none",SHARP="stroke-dasharray:none;stroke-dashoffset:0;animation:none;transition:none;stroke-linejoin:miter;stroke-miterlimit:10;vector-effect:none",TEXT="font-family:'Source Sans 3',sans-serif;font-weight:700;font-style:normal;font-stretch:normal;font-variant:normal;letter-spacing:0;word-spacing:0;text-transform:none;dominant-baseline:alphabetic;alignment-baseline:alphabetic;text-anchor:middle;stroke:none;paint-order:normal;fill:"+INK+";";
+var PAL=["#F0F0EE","#E4E4E1","#D8D8D4","#CBCBC7","#BEBEB9","#B0B0AB","#A2A29D","#94948F","#DCDAD5","#C9C6C0"];
+function mk(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;var t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function el(tag,a,p){var e=document.createElementNS(NS,tag);for(var k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function hexPts(cx,cy,r){var w=r*S3/2;return [[cx,cy-r],[cx+w,cy-r/2],[cx+w,cy+r/2],[cx,cy+r],[cx-w,cy+r/2],[cx-w,cy-r/2]].map(function(p){return p[0].toFixed(1)+","+p[1].toFixed(1);}).join(" ");}
+function inHex(x,y,cx,cy,r){var dx=Math.abs(x-cx),dy=Math.abs(y-cy);return dx<=r*S3/2&&dy<=r-dx/S3;}
+function pebble(g,x,y,rad,Rn,line){
+ var e=0.08+Rn()*0.3,rx=rad*(1+e),ry=rad*(1-e*0.55),col=PAL[Math.floor(Rn()*PAL.length)];
+ var pg=el("g",{transform:"translate("+x.toFixed(1)+","+y.toFixed(1)+") rotate("+(Rn()*180).toFixed(0)+")"},g);
+ el("ellipse",{rx:rx.toFixed(1),ry:ry.toFixed(1),fill:col,stroke:"#000","stroke-opacity":"0.2","stroke-width":line,style:SOLID},pg);
+ el("ellipse",{cx:(-rx*0.22).toFixed(1),cy:(-ry*0.3).toFixed(1),rx:(rx*0.55).toFixed(1),ry:(ry*0.33).toFixed(1),fill:"#FFF","fill-opacity":"0.28",style:"stroke:none"},pg);
+ if(rad>line*9&&Rn()<0.2)el("path",{d:"M "+(-rx*0.7).toFixed(1)+" "+(ry*0.1).toFixed(1)+" Q 0 "+(-ry*0.25).toFixed(1)+" "+(rx*0.72).toFixed(1)+" "+(ry*0.2).toFixed(1),fill:"none",stroke:"#FFF","stroke-opacity":"0.6","stroke-width":line,style:SOLID},pg);
+}
+function inkMap(tx,W,fs){
+ var cs=getComputedStyle(tx),font=cs.fontWeight+" "+fs+"px "+cs.fontFamily;
+ var H=Math.ceil(fs*1.7),base=Math.ceil(fs*1.15),c=document.createElement("canvas");c.width=W;c.height=H;
+ var x=c.getContext("2d");x.font=font;x.textAlign="left";x.textBaseline="alphabetic";x.fillStyle="#000";
+ var x0=tx.getStartPositionOfChar(0).x,ratio=tx.getComputedTextLength()/x.measureText("pebbl").width;
+ x.setTransform(ratio,0,0,1,x0*(1-ratio),0);x.fillText("pebbl",x0,base);
+ var d=x.getImageData(0,0,W,H).data,sky=new Array(W),flo=new Array(W);
+ for(var i=0;i<W;i++){sky[i]=Infinity;flo[i]=-Infinity;for(var j=0;j<H;j++){if(d[(j*W+i)*4+3]>40){sky[i]=j-base;break;}}if(isFinite(sky[i]))for(var j2=H-1;j2>=0;j2--){if(d[(j2*W+i)*4+3]>40){flo[i]=j2-base;break;}}}
+ return {sky:sky,flo:flo,asc:x.measureText("b").actualBoundingBoxAscent};
+}
+function quadPts(x0,y0,xc,yc,x1,y1,n){var o=[];for(var k=0;k<=n;k++){var t=k/n,u=1-t;o.push([u*u*x0+2*u*t*xc+t*t*x1,u*u*y0+2*u*t*yc+t*t*y1]);}return o;}
+window.PEBBL=function(host,o){
+ var id="pb"+Math.floor(Math.random()*1e9)+"_"+(uid++),W=o.W,H=o.H,cx=W/2,cy=H/2,R=1000,ri=R-o.border,wi=ri*S3/2,E=wi+80,half=o.tw/2,clr=half+o.gap;
+ var top=cy-ri/2,bot=cy+ri/2,b=top+o.halo/2,Lb=bot-o.halo/2,tip=cy-ri+o.tipDrop;
+ var svg=el("svg",{viewBox:"0 0 "+W+" "+H,width:"100%",role:"img"});host.appendChild(svg);
+ var cp=el("clipPath",{id:id},el("defs",{},svg));el("polygon",{points:hexPts(cx,cy,ri+2)},cp);
+ var tx=el("text",{x:cx,y:cy,"text-anchor":"middle",style:TEXT},svg);tx.textContent="pebbl";
+ var fs=o.fs,ty,Sx,Sy,Pl=cx-390,Pc=cx-315,Pr=cx-240,Tl,Tc,Tr,tl,tc,tr,pl,pc,pr;
+ var seg=function(x0,y0,x1,y1){var n=Math.ceil(Math.hypot(x1-x0,y1-y0)/4),a=[];for(var k=0;k<=n;k++)a.push([x0+(x1-x0)*k/n,y0+(y1-y0)*k/n]);return a;};
+ for(var it=0;it<14;it++){
+  tx.style.fontSize=fs+"px";tx.setAttribute("y",cy);
+  var m=inkMap(tx,W,fs);ty=b+o.textTop+m.asc;
+  var sky=m.sky.map(function(v){return v+ty;}),flo=m.flo.map(function(v){return v+ty;});
+  var ascTop=Math.min.apply(null,sky),runs=[],cur=null;
+  for(var i=0;i<W;i++){var on=sky[i]<=ascTop+fs*0.03;if(on&&!cur){cur={a:i,b:i};}else if(on){cur.b=i;}else if(cur){runs.push(cur);cur=null;}}
+  if(cur)runs.push(cur);
+  Sx=runs.length>=2?(runs[0].b+runs[1].a)/2:cx+fs*0.25;
+  var hits=function(pts){for(var k=0;k<pts.length;k++){var px=pts[k][0],py=pts[k][1];for(var xx=Math.floor(px-clr);xx<=Math.ceil(px+clr);xx++){if(xx<0||xx>=W||!isFinite(sky[xx]))continue;var dz=Math.sqrt(Math.max(0,clr*clr-(xx-px)*(xx-px)));if(sky[xx]<py+dz&&flo[xx]>py-dz)return true;}}return false;};
+  Sy=ascTop+o.dipBelowTop;while(Sy>b+40&&hits(seg(cx,tip,Sx,Sy).concat(seg(Sx,Sy,Sx+55,b))))Sy-=3;
+  Tl=Sx+120;Tc=Sx+240;Tr=Sx+360;tl=2*cx-Tr;tc=2*cx-Tc;tr=2*cx-Tl;pl=2*cx-Pr;pc=2*cx-Pc;pr=2*cx-Pl;
+  var lowPts=seg(cx-E,Lb,tl,Lb).concat(quadPts(tl,Lb,tc,Lb-190,tr,Lb,60)).concat(seg(tr,Lb,pl,Lb)).concat(quadPts(pl,Lb,pc,Lb-110,pr,Lb,40)).concat(seg(pr,Lb,cx+E,Lb));
+  if(!hits(lowPts))break;
+  fs-=8;
+ }
+ function loY(x){function bump(x0,x1,A){var t=(x-x0)/(x1-x0);return Lb-2*t*(1-t)*A;}
+  if(x>tl&&x<tr)return bump(tl,tr,190);if(x>pl&&x<pr)return bump(pl,pr,110);return Lb;}
+ svg.removeChild(tx);
+ el("polygon",{points:hexPts(cx,cy,ri+2),fill:GAP,style:"stroke:none"},svg);
+ var g=el("g",{"clip-path":"url(#"+id+")"},svg),Rn=mk(o.seed),placed=[];
+ for(var t=0;t<o.tries;t++){
+  var rad=o.minR+(o.maxR-o.minR)*Math.pow(Rn(),2)*(t<o.tries*0.2?1:0.6);
+  var x=cx+(Rn()*2-1)*(wi+rad),y=cy+(Rn()*2-1)*(ri+rad);
+  if(!inHex(x,y,cx,cy,ri+rad*0.9))continue;
+  if(y>top+rad*0.1&&y<loY(x)+o.halo*0.2)continue;
+  var clash=false;for(var i2=0;i2<placed.length;i2++){var p=placed[i2],dx=x-p.x,dy=y-p.y,mm=(rad+p.r)*0.9;if(dx*dx+dy*dy<mm*mm){clash=true;break;}}
+  if(clash)continue;placed.push({x:x,y:y,r:rad});pebble(g,x,y,rad,Rn,o.line);
+ }
+ var f=function(v){return v.toFixed(1);};
+ var q="M "+f(cx-E)+" "+f(b)+" L "+f(Pl)+" "+f(b)+" Q "+f(Pc)+" "+f(b-110)+" "+f(Pr)+" "+f(b)+" L "+f(cx-120)+" "+f(b)+" L "+f(cx-75)+" "+f(b+70)+" L "+f(cx)+" "+f(tip)+" L "+f(Sx)+" "+f(Sy)+" L "+f(Sx+55)+" "+f(b)+" L "+f(Tl)+" "+f(b)+" Q "+f(Tc)+" "+f(b-190)+" "+f(Tr)+" "+f(b)+" L "+f(cx+E)+" "+f(b);
+ var lo="M "+f(cx-E)+" "+f(Lb)+" L "+f(tl)+" "+f(Lb)+" Q "+f(tc)+" "+f(Lb-190)+" "+f(tr)+" "+f(Lb)+" L "+f(pl)+" "+f(Lb)+" Q "+f(pc)+" "+f(Lb-110)+" "+f(pr)+" "+f(Lb)+" L "+f(cx+E)+" "+f(Lb);
+ var loRev="L "+f(cx+E)+" "+f(Lb)+" L "+f(pr)+" "+f(Lb)+" Q "+f(pc)+" "+f(Lb-110)+" "+f(pl)+" "+f(Lb)+" L "+f(tr)+" "+f(Lb)+" Q "+f(tc)+" "+f(Lb-190)+" "+f(tl)+" "+f(Lb)+" L "+f(cx-E)+" "+f(Lb)+" Z";
+ var tg=el("g",{"clip-path":"url(#"+id+")"},svg);
+ el("path",{d:q+" "+loRev,fill:"#FFFFFF",stroke:"none",style:"stroke:none"},tg);
+ [q,lo].forEach(function(d){el("path",{d:d,fill:"none",stroke:"#FFFFFF","stroke-width":o.halo,"stroke-linejoin":"round","stroke-linecap":"round",style:SOLID},tg);});
+ [q,lo].forEach(function(d){el("path",{d:d,fill:"none",stroke:BLUE,"stroke-width":o.tw,"stroke-linejoin":"round","stroke-linecap":"round",style:SOLID},tg);});
+ el("polygon",{points:hexPts(cx,cy,R-o.border/2),fill:"none",stroke:INK,"stroke-width":o.border,"stroke-linejoin":"miter",style:SHARP},svg);
+ tx.setAttribute("y",f(ty));tx.style.fontSize=fs+"px";svg.appendChild(tx);
+ return {fs:fs,Sx:Sx,Sy:Sy};
+};
+// The icon version of the PEBBL hex (branding/pebbl_core.js, version 7), drawn once the typeface has loaded.
+var ICON={W:1732,H:2000,border:95,bleed:0,seed:61,tries:3500,minR:80,maxR:190,line:12,tw:100,halo:190,gap:40,fs:500,textTop:250,dipBelowTop:40,tipDrop:210};
+function draw(){var host=document.getElementById("logo");if(host&&!host.firstChild){try{window.PEBBL(host,ICON);}catch(e){}}}
+if(document.fonts&&document.fonts.load){document.fonts.load("700 500px 'Source Sans 3'").then(draw,draw);}else{draw();}
+})();
+</script>

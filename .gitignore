@@ -1,0 +1,16 @@
+# PEBBL's own Python environment (made by the setup script) and caches
+annotate_env/
+__pycache__/
+*.pyc
+# Output of the demo and of local runs
+demo_output/
+processing_log_READONLY_SNAPSHOT.csv
+# Participant data never belongs here
+test_input/
+*.tsv.gz
+*_physio.json
+*_annotations_*.json
+*_annotations_*.log
+# Practice answer keys stay with lab staff
+*practice_key*.json
+practice/

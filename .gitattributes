@@ -1,0 +1,4 @@
+# Line endings for PEBBL's launchers: Windows batch files need CRLF; the Mac scripts need LF.
+*.bat text eol=crlf
+*.sh text eol=lf
+*.command text eol=lf

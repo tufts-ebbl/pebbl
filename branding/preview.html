@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>PEBBL logo preview</title>
+<!-- Preview of the PEBBL hex sticker and icon (design in progress; see README.md).
+     Serve this folder over http (a browser can't load pebbl_core.js from file://):
+       annotate_env\Scripts\python.exe -m http.server 8765 --bind 127.0.0.1 --directory branding
+     then open http://localhost:8765/preview.html
+     Query options:
+       ?w=290      sticker display width in px (290 = the size seen in the chat widget)
+       ?hostile=1  add stylesheet rules like the ones suspected in the chat widget
+                   (forced miter joins, dashes, central text baseline) to test the overrides
+       ?guides=1   show the print guides and bleed -->
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@700&display=swap" rel="stylesheet">
+<style>
+body{margin:16px;background:#fff;font-family:"Source Sans 3",sans-serif;color:#22282A}
+.row{display:flex;flex-wrap:wrap;gap:26px;align-items:flex-end}
+.cap{font-size:12px;color:#666;text-align:center;margin-top:6px}
+.guides{display:none}.show .guides{display:inline}
+</style>
+<script>
+var Q=new URLSearchParams(location.search);
+if(Q.get("hostile")==="1")document.write('<style>path,polyline,line,polygon,ellipse{stroke-linejoin:miter;stroke-miterlimit:4;stroke-linecap:butt;stroke-dasharray:400 200}text{dominant-baseline:central;letter-spacing:3px}</style>');
+</script>
+</head><body>
+<div id="wrap" class="row">
+ <div><div id="s"></div><div class="cap">Sticker as cut, 1.73 × 2 in (+1/16 in bleed with ?guides=1)</div></div>
+ <div><div id="i128" style="width:111px"></div><div class="cap">Icon, 128 px</div></div>
+ <div><div id="i32" style="width:28px;margin:0 auto"></div><div class="cap">32 px</div></div>
+</div>
+<script src="pebbl_core.js"></script>
+<script>
+document.getElementById("s").style.width=(Q.get("w")||"290")+"px";
+if(Q.get("guides")==="1")document.getElementById("wrap").classList.add("show");
+// Units: 1000 = 1 inch. Sticker cut hex is 1732 x 2000 (pointy top), bleed 62.5, border 80.
+var S={W:1857,H:2125,border:80,bleed:62.5,seed:51,tries:8000,minR:38,maxR:140,line:8,tw:60,halo:130,gap:40,fs:450,textTop:250,dipBelowTop:45,tipDrop:170};
+var I={W:1732,H:2000,border:95,bleed:0,seed:61,tries:3500,minR:80,maxR:190,line:12,tw:100,halo:190,gap:40,fs:500,textTop:250,dipBelowTop:40,tipDrop:210};
+document.fonts.load("700 450px 'Source Sans 3'").then(function(){
+ window.RESULT={sticker:PEBBL(document.getElementById("s"),S),icon:PEBBL(document.getElementById("i128"),I)};
+ PEBBL(document.getElementById("i32"),I);
+});
+</script>
+</body></html>
