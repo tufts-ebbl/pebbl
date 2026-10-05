@@ -45,13 +45,13 @@ GUIDE_BOX_DEFAULTS = {"ecg": False, "other": True}
 
 # Certification practice (HLU, 2026-10-04).
 PRACTICE_BOX_LABEL = "Practice for certification (practice participant 990)"
-PRACTICE_NOTE = ("Uses the 'practice' folder next to your Box derivatives folder. Build your ECG template in Step 1 "
+PRACTICE_NOTE = ("Uses the 'practice' folder next to your data folder. Build your ECG template in Step 1 "
                  "first. After you save a Step 2 review, PEBBL scores it and can show your marks next to the answer key.")
 PRACTICE_SUBJECT = "990"
 
 
 def practice_root_for(derivatives_path):
-    """The practice folder: a 'practice' folder next to the Box derivatives folder."""
+    """The practice folder: a 'practice' folder next to the data folder (for our lab, the Box derivatives folder)."""
     return os.path.join(os.path.dirname(os.path.normpath(derivatives_path)), "practice")
 from processing_log import initials_confirmation_text, known_initials
 
@@ -113,7 +113,8 @@ class ReviewLauncherDialog(QDialog):
         self.browse_button.clicked.connect(self._browse_box_path)
         box_path_row.addWidget(self.box_path_edit)
         box_path_row.addWidget(self.browse_button)
-        form.addRow(QLabel("Box derivatives path:"), box_path_row)
+        # Any folder holding the sub-XXX folders works; Box is our lab's (HLU, 2026-10-05).
+        form.addRow(QLabel("Data folder:"), box_path_row)
 
         self.subject_edit = QLineEdit()
         self.subject_edit.setPlaceholderText("e.g. 001")
@@ -211,11 +212,11 @@ class ReviewLauncherDialog(QDialog):
         self.template_window_label = QLabel("Template window length (s), Step 1 only:")
         advanced_form.addRow(self.template_window_label, self.template_window_edit)
 
-        self.no_local_copy_checkbox = QCheckBox("Skip local copy (work directly against the Box path)")
+        self.no_local_copy_checkbox = QCheckBox("Skip local copy (work directly in the data folder)")
         self.no_local_copy_checkbox.stateChanged.connect(self._on_field_changed)
         advanced_form.addRow(QLabel(""), self.no_local_copy_checkbox)
 
-        self.keep_local_checkbox = QCheckBox("Keep the local copy after pushing back to Box (troubleshooting)")
+        self.keep_local_checkbox = QCheckBox("Keep the local copy after copying back to the data folder (troubleshooting)")
         advanced_form.addRow(QLabel(""), self.keep_local_checkbox)
 
         layout.addWidget(self.lab_staff_box)
@@ -366,7 +367,7 @@ class ReviewLauncherDialog(QDialog):
             self.subject_edit.setText(self._subject_before_practice)
 
     def _browse_box_path(self):
-        chosen = QFileDialog.getExistingDirectory(self, "Select Box derivatives folder")
+        chosen = QFileDialog.getExistingDirectory(self, "Select the data folder (the one holding the sub-XXX folders)")
         if chosen:
             self.box_path_edit.setText(chosen)
 
@@ -431,14 +432,14 @@ class ReviewLauncherDialog(QDialog):
         if practice and box_path:
             practice_root = practice_root_for(box_path)
             if not os.path.isdir(practice_root):
-                self.error_label.setText(f"There's no practice folder at {practice_root}. Check the Box derivatives "
+                self.error_label.setText(f"There's no practice folder at {practice_root}. Check the data folder "
                                          f"path, or ask the lab staff to set up the practice folder.")
                 return
             box_path, subject = practice_root, PRACTICE_SUBJECT
 
         if not box_path or not subject or (not local_path and not no_local_copy):
             self.error_label.setText(
-                "Please fill in the Box path, subject, and local working folder "
+                "Please fill in the data folder, subject, and local working folder "
                 "(or, under lab-staff options, check 'Skip local copy'), or check 'Use synthetic demo data'."
             )
             return

@@ -29,6 +29,7 @@ import tempfile
 from unittest.mock import patch
 
 import mne
+import numpy as np
 
 import practice_certification as pc
 import session_summary_gui
@@ -98,14 +99,17 @@ def main():
             assert untouched["channels"][ch]["bad_segments"] == sidecar["MachineQC"]["Channels"][ch]["BadSegments"], ch
         ok, results, lines = pc.score_run(key, untouched, "1")
         text = "\n".join(lines)
-        assert not ok and results["bad_ppg"] is True, (results, text)  # the machine's dropout mark is right
-        for ch in ("ecg", "bad_ecg", "ppg", "rsp", "eda", "sbp", "dbp"):
+        assert not ok and results["bad_ppg"] is False, (results, text)
+        assert "OK   finger-pulse dropout" in text, "the machine's dropout mark is right"
+        assert "FIX  the weak, odd pulse after the premature beat: mark it bad_ppg" in text, \
+            "the machine doesn't mark the weak pulse; the RA must"
+        for ch in ("ecg", "bad_ecg", "ppg", "bad_ppg", "rsp", "eda", "sbp", "dbp"):
             assert results[ch] is False, (ch, text)
         assert "extra mark(s) where there's no heartbeat" in text and "with no mark within 20 ms" in text, text
         for ch in ("rsp", "eda", "sbp", "dbp"):
             missed = run1["channels"][ch]["machine_qc"]["missed"]
             assert f"FIX  {missed}" in text, (ch, missed)
-        assert "the machine's mark on the breath hold (flagged by mistake)" in text, text
+        assert "the machine's mark on shallow breathing (flagged by mistake)" in text, text
         print(f"   OK: {sum(1 for v in results.values() if not v)} channels NOT YET; missed beats, extras, the "
               f"machine's missed artifacts and false flags all listed")
 
@@ -154,6 +158,76 @@ def main():
                                                 {"ecg": CHANNELS["ecg"]}, sfreq)
         assert any(abs(onset - pvc / sfreq) < 2.0 for _ch, onset, *_ in flagged), flagged
         print(f"   OK: flagged near {pvc / sfreq:.1f} s")
+
+        print("7. The ends of a run aren't scored (HLU, 2026-10-05: a correct mark on a visible beat at ~179.7 s "
+              "was called extra, because the key leaves out the last 0.6 s); the premature beat's key sample is "
+              "the top of the final signal...")
+        n = run1["n_samples"]
+        ecg_df, _ = load_physio_tsv(os.path.join(practice, "sub-990", "ses-run1", "beh",
+                                                 "sub-990_ses-run1_task-sdi_physio.tsv.gz"))
+        signal = ecg_df["ecg"].to_numpy()
+        last_true = max(run1["channels"]["ecg"]["true_peaks"])
+        tail = signal[last_true + 400:]  # a beat after the key's last one, if the run has one there
+        sub = perfect(run1)
+        sub["channels"]["ecg"]["indices"].append(n - 300)   # in the last second: never "extra"
+        sub["channels"]["ecg"]["indices"].append(int(0.2 * sfreq))  # in the first half second: never "extra"
+        assert pc.score_run(key, sub, "1", ["ecg"])[1] == {"ecg": True}, "edge marks aren't extra"
+        sub = perfect(run1)
+        sub["channels"]["ecg"]["indices"] = [i for i in sub["channels"]["ecg"]["indices"] if i < n - 1000]
+        dropped = len(perfect(run1)["channels"]["ecg"]["indices"]) - len(sub["channels"]["ecg"]["indices"])
+        ok, _res, lines = pc.score_run(key, sub, "1", ["ecg"])
+        assert ok, f"beats in the last second aren't required ({dropped} left unmarked): {lines}"
+        sub["channels"]["ecg"]["indices"].append(n - 5000)  # 5 s from the end is scored as usual
+        assert not pc.score_run(key, sub, "1", ["ecg"])[0], "an extra mark away from the ends still fails"
+        assert signal[pvc] == signal[max(0, pvc - 30):pvc + 31].max(), "the PVC's key sample is the final signal's top"
+        print(f"   OK: marks in the first 0.5 s / last 1.0 s are never extra; beats there aren't required "
+              f"({len(tail)} samples after the key's last beat); the PVC sample is the signal's top")
+
+        print("8. RSP (HLU, 2026-10-05: mark bad wherever you can't see where each breath peaks): the flat held "
+              "breath and real clipping (tops cut flat at the run's maximum) are artifacts; the sigh is one whole "
+              "breath; the 'marked bad where the signal is fine' line is a total and says where...")
+        rsp_key = run1["channels"]["rsp"]
+        kinds = [a["type"] for a in rsp_key["artifacts"]]
+        assert any(k.startswith("flat line (a held breath)") for k in kinds), kinds
+        assert any(k.startswith("clipped breath tops") for k in kinds), kinds
+        assert [t["type"].split(":")[0] for t in rsp_key["traps"]] == ["a sigh (one deep breath)", "shallow breathing"]
+        rsp_signal = ecg_df["rsp"].to_numpy()
+        clip = next(a for a in rsp_key["artifacts"] if a["type"].startswith("clipped"))
+        at_max = np.flatnonzero(rsp_signal >= rsp_signal.max() - 1e-9)
+        assert len(at_max) > 0.5 * sfreq and clip["start"] <= at_max.min() and at_max.max() < clip["end"], \
+            "the flat tops sit at the run's maximum, inside the clipping artifact"
+        sigh = rsp_key["traps"][0]
+        assert 2.5 <= (sigh["end"] - sigh["start"]) / sfreq <= 8.0, "a whole breath"
+        sub = perfect(run1)
+        sub["channels"]["rsp"]["bad_segments"] += [[sigh["start"], sigh["end"]]]
+        ok, _res, lines = pc.score_run(key, sub, "1", ["rsp"])
+        fine_line = next(line for line in lines if "marked bad where the signal is fine" in line)
+        assert not ok and "s in all marked bad" in fine_line, fine_line
+        assert f"at {sigh['start'] / sfreq:.1f}-" in fine_line, fine_line
+        print(f"   OK: {fine_line.strip()}")
+
+        print("9. PPG (HLU, 2026-10-05): the weak pulse after the premature beat is a bad_ppg stretch (its own "
+              "wave), not a pulse to keep; marking up to 2 s either side of the dropout is fine...")
+        bad_ppg = run1["channels"]["bad_ppg"]
+        drop, weak = bad_ppg["artifacts"]
+        assert drop.get("leeway_sec") == 2.0 and "weak, odd pulse" in weak["type"]
+        assert run1["channels"]["ppg"]["traps"] == []
+        assert (weak["end"] - weak["start"]) / sfreq < 1.2, "the odd pulse itself, not the pause after it"
+        sub = perfect(run1)
+        sub["channels"]["bad_ppg"]["bad_segments"] = [[drop["start"] - 1900, drop["end"] + 1900],
+                                                      [weak["start"], weak["end"]]]
+        assert pc.score_run(key, sub, "1", ["bad_ppg"])[1] == {"bad_ppg": True}, "1.9 s each side of the dropout"
+        sub["channels"]["bad_ppg"]["bad_segments"][0] = [drop["start"] - 4500, drop["end"] + 4500]
+        assert pc.score_run(key, sub, "1", ["bad_ppg"])[1] == {"bad_ppg": False}, "4.5 s each side is too much"
+        sub["channels"]["bad_ppg"]["bad_segments"] = [[drop["start"], drop["end"]]]
+        ok, _res, lines = pc.score_run(key, sub, "1", ["bad_ppg"])
+        assert not ok and any(l.startswith("  FIX  the weak, odd pulse") for l in lines), lines
+        sub = perfect(run1)
+        sub["channels"]["ppg"]["indices"].remove(run1["channels"]["ppg"]["true_peaks"][
+            int(np.argmin(np.abs(np.asarray(run1["channels"]["ppg"]["true_peaks"]) - (weak["start"] + weak["end"]) / 2)))])
+        assert pc.score_run(key, sub, "1", ["ppg", "bad_ppg"])[0], "no mark on the weak pulse inside its bad stretch"
+        print("   OK: weak pulse is bad_ppg; 1.9 s around the dropout passes, 4.5 s doesn't; unmarked weak pulse fails; "
+              "its peak needn't be marked")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     print("\nALL PRACTICE CERTIFICATION TESTS PASSED.")

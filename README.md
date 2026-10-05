@@ -16,7 +16,7 @@ Read the **[PEBBL user manual](https://tufts-ebbl.github.io/pebbl/)** (or
 [download it as a PDF](https://tufts-ebbl.github.io/pebbl/PEBBL_User_Manual.pdf)). It covers setting up a
 Windows or Mac computer (about 30 minutes, once) and reviewing each signal.
 
-In short, after installing Python 3.11, Git and Box Drive:
+In short, after installing Python 3.11 and Git, and getting access to your data folder (our lab's is on Box):
 
 ```
 cd ~

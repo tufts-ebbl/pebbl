@@ -89,11 +89,34 @@ def main():
         print("4. The form opens with no arguments...")
         shutil.copyfile(pl.REQUIREMENTS, pl.INSTALLED)
         with patch.object(pl, "update_code", return_value="PEBBL is up to date."), \
-             patch.object(pl.subprocess, "call", return_value=0) as call, patch("builtins.print"):
+             patch.object(pl.subprocess, "call", side_effect=[pl.FORM_CANCELED_EXIT]) as call, patch("builtins.print"):
             assert pl.main() == 0
         args = call.call_args[0][0]
         assert args[1] == os.path.join(pl.HERE, "physio_review.py") and len(args) == 2, args
+        assert call.call_args[1]["env"]["PEBBL_LAUNCHER"] == "1"
         print("   OK")
+
+        print("5. Back to the form after each session (HLU, 2026-10-05): a finished session (0) or one that "
+              "stopped with its own message (4) opens the form again; Cancel (3) closes PEBBL with 0; Ctrl-C or "
+              "any other failure closes it with that code, so nothing loops...")
+        with patch.object(pl.subprocess, "call", side_effect=[0, pl.SESSION_STOPPED_EXIT, 0, pl.FORM_CANCELED_EXIT]) \
+                as call, patch("builtins.print") as printed:
+            assert pl.run_sessions() == 0
+        assert call.call_count == 4
+        said = " ".join(str(c.args[0]) for c in printed.call_args_list)
+        assert "Opening the form for your next session" in said and "stopped early" in said
+        for code in (1, 130):
+            with patch.object(pl.subprocess, "call", side_effect=[0, code]) as call, patch("builtins.print"):
+                assert pl.run_sessions() == code and call.call_count == 2
+        import ast
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "physio_review.py"), encoding="utf-8") as f:
+            tree = ast.parse(f.read())
+        consts = {t.id: n.value.value for n in tree.body if isinstance(n, ast.Assign)
+                  for t in n.targets if isinstance(t, ast.Name) and isinstance(n.value, ast.Constant)}
+        assert consts["FORM_CANCELED_EXIT"] == pl.FORM_CANCELED_EXIT
+        assert consts["SESSION_STOPPED_EXIT"] == pl.SESSION_STOPPED_EXIT
+        assert consts["LAUNCHER_ENV"] == "PEBBL_LAUNCHER"
+        print("   OK: loops on 0 and 4; Cancel ends with 0; 1 and 130 end with their code; codes match physio_review")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     print("\nALL PEBBL LAUNCHER TESTS PASSED.")

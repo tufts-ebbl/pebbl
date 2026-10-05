@@ -128,7 +128,7 @@ footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);color:v
     <p class="tag">Please Eyeball Before Believing Labels.</p>
   </div>
 </header>
-<p class="meta">For research assistants. Updated 4 October 2026. If anything here doesn't match what you see, tell the lab staff. <a href="PEBBL_User_Manual.pdf">Download it as a PDF</a>.</p>
+<p class="meta">For research assistants. Updated 5 October 2026. If anything here doesn't match what you see, tell the lab staff. <a href="PEBBL_User_Manual.pdf">Download it as a PDF</a>.</p>
 
 <nav class="toc" aria-label="Contents">
   <span class="h">Contents</span>
@@ -142,13 +142,14 @@ footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);color:v
     <li><a href="#certify">Get certified</a></li>
     <li><a href="#step3">Step 3: reconciling two reviews</a></li>
     <li><a href="#help">When something goes wrong</a></li>
+    <li><a href="#layout">How the data folder is organized</a></li>
   </ol>
 </nav>
 
 <section id="what">
 <h2>1. What PEBBL does</h2>
 <p>Our studies record several body signals at once: heartbeat, finger pulse, breathing, sweat and blood pressure. A computer finds the heartbeats and flags stretches that look unusable, but it makes mistakes. PEBBL shows you each recording with the computer's marks on it, and you check them by eye and fix them. Two research assistants check each recording separately, and a reconciler then settles any disagreements.</p>
-<p>PEBBL never changes the recordings. It saves your marks in a separate file next to the recording on Box, named with your initials.</p>
+<p>PEBBL never changes the recordings. It saves your marks in a separate file next to the recording in the data folder (for our lab, on Box), named with your initials.</p>
 <p>The work comes in three steps, which you pick in PEBBL's form:</p>
 <ul>
   <li><strong>Step 1: Build ECG QRS template.</strong> Once per participant, before you review their ECG. You correct 20 seconds of heartbeats, and PEBBL uses them to find heartbeats in the rest of the recording.</li>
@@ -159,7 +160,8 @@ footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);color:v
 
 <section id="setup">
 <h2>2. Set up your computer (once)</h2>
-<p>Allow about 30 minutes, mostly waiting. You need an internet connection and permission to install programs. On a lab computer, ask the lab staff if an installer is blocked. Wherever these steps say <span class="path">YOU</span>, use your own username on that computer.</p>
+<p class="note"><strong>On a lab computer, PEBBL is already installed.</strong> Skip to step 6 (make your own working folder), then start PEBBL with the <strong>PEBBL</strong> icon on the desktop. Sign in to Box Drive with your own account if it asks.</p>
+<p>On your own computer, allow about 30 minutes, mostly waiting. You need an internet connection and permission to install programs. Wherever these steps say <span class="path">YOU</span>, use your own username on that computer.</p>
 
 <ol class="steps">
 <li>
@@ -184,13 +186,13 @@ footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);color:v
   </div>
 </li>
 <li>
-  <h3>Set up Box Drive</h3>
-  <p>If the computer doesn't have Box Drive yet, install it from <a href="https://www.box.com/resources/downloads">box.com/resources/downloads</a> and sign in with your Tufts account. Then check that you can open the lab's physio folder:</p>
+  <h3>Get access to the data</h3>
+  <p>PEBBL reviews recordings kept in a <strong>data folder</strong>: any folder on your computer, a network drive or a cloud drive, organized as in <a href="#layout">section 10</a>. In our lab it's on Box. If the computer doesn't have Box Drive yet, install it from <a href="https://www.box.com/resources/downloads">box.com/resources/downloads</a> and sign in with your Tufts account. Then check that you can open the lab's physio folder:</p>
   <ul class="paths">
     <li><strong>Windows:</strong> <span class="path">C:\Users\YOU\Box\DATA\Processed\physioProcessing\derivatives</span></li>
     <li><strong>Mac:</strong> Finder sidebar → <strong>Box</strong> → <span class="path">DATA/Processed/physioProcessing/derivatives</span></li>
   </ul>
-  <p>If you can't see the <span class="path">DATA</span> folder, ask the lab staff for access.</p>
+  <p>If you can't see the <span class="path">DATA</span> folder, ask the lab staff for access. For another study, the people running it will tell you where its data folder is.</p>
 </li>
 <li>
   <h3>Download PEBBL</h3>
@@ -218,7 +220,7 @@ git clone https://github.com/tufts-ebbl/pebbl.git</pre>
 </li>
 <li>
   <h3>Make a working folder</h3>
-  <p>Make an empty folder called <span class="path">PhysioWorking</span> in your home folder (<span class="path">C:\Users\YOU\PhysioWorking</span>, or <span class="path">/Users/YOU/PhysioWorking</span> on a Mac). While you work, PEBBL copies one participant's files here, and it deletes the copy once your work is safely back on Box.</p>
+  <p>Make an empty folder called <span class="path">PhysioWorking</span> in your home folder (<span class="path">C:\Users\YOU\PhysioWorking</span>, or <span class="path">/Users/YOU/PhysioWorking</span> on a Mac). While you work, PEBBL copies one participant's files here, and it deletes the copy once your work is safely back in the data folder. On a shared computer, everyone makes their own.</p>
 </li>
 <li>
   <h3>Start PEBBL</h3>
@@ -228,7 +230,7 @@ git clone https://github.com/tufts-ebbl/pebbl.git</pre>
     <div class="os"><div class="os-name">Mac</div>
       <p>Double-click <strong>Start PEBBL.command</strong> in the <span class="path">pebbl</span> folder (Finder → <strong>Go</strong> → <strong>Home</strong> → <span class="path">pebbl</span>). To keep it handy, drag it to the right-hand end of your Dock.</p></div>
   </div>
-  <p>Each time, PEBBL first checks for updates, then opens its form. A text window (the <strong>terminal</strong>) stays open behind the form, and PEBBL writes notes there during your session. <strong>Don't close it</strong> until it says <em>PEBBL has closed</em>.</p>
+  <p>Each time, PEBBL first checks for updates, then opens its form. A text window (the <strong>terminal</strong>) stays open behind the form, and PEBBL writes notes there during your session. After each session the form opens again; click <strong>Cancel</strong> on it to close PEBBL. <strong>Don't close the terminal</strong> until it says <em>PEBBL has closed</em>.</p>
 </li>
 <li>
   <h3>Try the demo</h3>
@@ -281,12 +283,12 @@ git clone https://github.com/tufts-ebbl/pebbl.git</pre>
 
 <h3>Fill in the form</h3>
 <figure class="small">
-  <img src="img/form.png" alt="PEBBL's form with Step 2 selected, a Box path, subject 001, run 1, channel ECG and initials abc." width="640" height="569">
+  <img src="img/form.png" alt="PEBBL's form with Step 2 selected, a data folder on Box, subject 001, run 1, channel ECG and initials abc." width="640" height="569">
   <figcaption>The form, ready for an ECG review of participant 001, run 1.</figcaption>
 </figure>
 <ul>
   <li><strong>Step:</strong> usually <em>Step 2: Review a channel</em>.</li>
-  <li><strong>Box derivatives path:</strong> click <strong>Browse</strong> and choose the <span class="path">derivatives</span> folder from setup step 3. PEBBL remembers it.</li>
+  <li><strong>Data folder:</strong> click <strong>Browse</strong> and choose the folder that holds the participant folders (<span class="path">sub-001</span>, <span class="path">sub-002</span>, …). In our lab, that's the Box <span class="path">derivatives</span> folder from setup step 3. PEBBL remembers it.</li>
   <li><strong>Subject</strong>, <strong>Run</strong> and <strong>Channel to review:</strong> from your assignment. <span class="path">1</span>, <span class="path">001</span> and <span class="path">sub-001</span> all work as the subject.</li>
   <li><strong>Local working folder:</strong> your <span class="path">PhysioWorking</span> folder.</li>
   <li><strong>Your initials.</strong></li>
@@ -334,7 +336,7 @@ git clone https://github.com/tufts-ebbl/pebbl.git</pre>
   <li><strong>I've finished reviewing this for this run:</strong> tick it only when you've checked the whole run, start to end, including the parts before and after the task.</li>
   <li><strong>Save.</strong> <em>Discard</em> throws away this session's changes and keeps your earlier saved work.</li>
 </ul>
-<p>PEBBL then copies your file back to Box, checks it arrived, and deletes the local copy. Wait for <em>PEBBL has closed</em> before closing the terminal window, then update the tracking spreadsheet.</p>
+<p>PEBBL then copies your file back to the data folder, checks it arrived, and deletes the local copy. Then the form opens again, ready for your next session. Update the tracking spreadsheet after each session. When you're done for the day, click <strong>Cancel</strong> on the form and wait for <em>PEBBL has closed</em> before closing the terminal window.</p>
 <p><strong>You can stop partway.</strong> Save without ticking <em>finished</em>. Next time, start PEBBL with the same participant, run, channel and initials, and it picks up where you left off.</p>
 </section>
 
@@ -362,7 +364,8 @@ git clone https://github.com/tufts-ebbl/pebbl.git</pre>
   <div class="mark"><div class="h">Fix</div><ul>
     <li><strong>To add a peak, drag a box over the whole top of the pulse,</strong> both humps if it has two. PEBBL puts the mark on the highest point.</li>
     <li>Delete peaks in dropouts: low, smooth arcs with no clear pulse.</li>
-    <li>Move marks the summary lists as <em>not on a crest</em> (they're on a slope) onto a crest.</li></ul></div>
+    <li>Move marks the summary lists as <em>not on a crest</em> (they're on a slope) onto a crest.</li>
+    <li>Mark <span class="label">bad_ppg</span> over a pulse you can't trust, such as a small, odd one right after an early heartbeat, instead of giving it a peak.</li></ul></div>
   <div class="keep"><div class="h">Leave alone</div><ul>
     <li>A mark on either hump of a two-humped pulse. Don't move marks from one hump to the other.</li>
     <li>Never add a peak where you can't see a pulse, even if the rhythm says one should be there.</li></ul></div>
@@ -374,9 +377,11 @@ git clone https://github.com/tufts-ebbl/pebbl.git</pre>
 <h3>RSP <span class="what">Bad stretches only</span></h3>
 <div class="dodont">
   <div class="mark"><div class="h">Mark bad</div><ul>
-    <li>Only where the belt stopped recording: a flat line with no breaths.</li></ul></div>
+    <li><strong>Anywhere you can't see where each breath peaks:</strong> you can't place a peak you can't see.</li>
+    <li>A flat line with no breaths, whether the belt stopped recording or a breath was held.</li>
+    <li>Clipped tops: breaths cut off flat at the very top of the recording's range.</li></ul></div>
   <div class="keep"><div class="h">Leave alone</div><ul>
-    <li><strong>If you can see breaths, it's not bad:</strong> pauses, breath holds, sighs and shallow breathing are all real.</li></ul></div>
+    <li><strong>Breaths whose peaks you can see,</strong> however odd: sighs, shallow breathing and pauses between breaths are all real.</li></ul></div>
 </div>
 <p>The review starts with the computer's flags; check each one. The EDA guide row underneath helps: a rise in EDA 1 to 3 seconds after a big breath shows the breath was real. Never mark RSP bad because of EDA.</p>
 </div>
@@ -416,7 +421,7 @@ git clone https://github.com/tufts-ebbl/pebbl.git</pre>
 <ol class="steps">
 <li>
   <h3>Tick <em>Practice for certification</em></h3>
-  <p>It's near the top of the form. PEBBL fills in subject 990 and uses the practice folder on Box. Keep your usual Box derivatives path, working folder and initials. Step 3 isn't part of practice.</p>
+  <p>It's near the top of the form. PEBBL fills in subject 990 and uses the <span class="path">practice</span> folder next to your data folder. Keep your usual data folder, working folder and initials. Step 3 isn't part of practice.</p>
 </li>
 <li>
   <h3>Build the ECG template (Step 1)</h3>
@@ -449,7 +454,7 @@ git clone https://github.com/tufts-ebbl/pebbl.git</pre>
   <thead><tr><th>Marks</th><th>To pass</th></tr></thead>
   <tbody>
     <tr><td>Peaks (ECG, PPG)</td><td>Every heartbeat or pulse has a mark within 20 ms (ECG) or 30 ms (PPG) of the key's, and there are no extra marks. On a two-humped pulse, either hump counts. Beats inside a stretch you correctly marked bad don't need marks.</td></tr>
-    <tr><td>Bad stretches (all channels)</td><td>At least 80% of each real artifact is marked bad. Real signal that looks odd, and the computer's mistaken marks, are no more than 25% marked. In all, no more than 2 seconds are marked bad where the signal is fine.</td></tr>
+    <tr><td>Bad stretches (all channels)</td><td>At least 80% of each real artifact is marked bad. Real signal that looks odd, and the computer's mistaken marks, are no more than 25% marked. In all, no more than 2 seconds are marked bad where the signal is fine. Up to 2 seconds on either side of a finger-pulse dropout count as part of it.</td></tr>
   </tbody>
 </table></div>
 <p>When every channel you practiced passes, tell the lab staff. Your score is also saved in your session log, so they can check it there.</p>
@@ -464,11 +469,37 @@ git clone https://github.com/tufts-ebbl/pebbl.git</pre>
 <h2>9. When something goes wrong</h2>
 <ul>
   <li><strong>Tell the lab staff:</strong> what you were doing (participant, run, channel, step), plus a photo of the window.</li>
-  <li><strong>PEBBL keeps a session log</strong> next to your file on Box, ending in <span class="path">_annotations_YOURINITIALS.log</span>. The lab staff can read what happened there.</li>
+  <li><strong>PEBBL keeps a session log</strong> next to your file in the data folder, ending in <span class="path">_annotations_YOURINITIALS.log</span>. The lab staff can read what happened there.</li>
   <li><strong>Closed a window by accident?</strong> Your last save is safe; unsaved changes are lost. Start again and PEBBL resumes from your last save.</li>
-  <li><strong>PEBBL says files from an earlier session never reached Box:</strong> answer <code>y</code> to copy them to Box.</li>
+  <li><strong>PEBBL says files from an earlier session were never copied back to the data folder:</strong> answer <code>y</code> to copy them there.</li>
   <li><strong>A message says <span class="path">processing_log.csv</span> is open:</strong> close it in Excel. Your marks are already saved.</li>
 </ul>
+</section>
+
+<section id="layout">
+<h2>10. How the data folder is organized</h2>
+<p>In our lab, the processing pipeline already lays out the Box folder this way, so RAs can skip this section. It's for lab staff, and for anyone setting up PEBBL for another study.</p>
+<p>The data folder holds one folder per participant. Each run of a recording sits in its own folder, with a JSON file of the same name beside it:</p>
+<pre>data folder/
+  sub-001/
+    ses-run1/
+      beh/
+        sub-001_ses-run1_task-sdi_physio.tsv.gz
+        sub-001_ses-run1_task-sdi_physio.json
+    ses-run2/
+      beh/
+        sub-001_ses-run2_task-sdi_physio.tsv.gz
+        sub-001_ses-run2_task-sdi_physio.json
+  sub-002/
+    …</pre>
+<ul>
+  <li><strong>Participants:</strong> <span class="path">sub-</span> plus the ID. IDs shorter than three characters get leading zeros, so participant 1 is <span class="path">sub-001</span>.</li>
+  <li><strong>Runs:</strong> <span class="path">ses-run1</span> and, if there is one, <span class="path">ses-run2</span>. A study with one recording per participant only needs <span class="path">ses-run1</span>.</li>
+  <li><strong>File names:</strong> <span class="path">sub-ID_ses-runN_task-NAME_physio.tsv.gz</span>, where <span class="path">NAME</span> is the study's task name (ours is <span class="path">sdi</span>). Keep only one recording per run folder.</li>
+  <li><strong>The recording</strong> is a tab-separated table, compressed with gzip, with one row per sample and no header row.</li>
+  <li><strong>The JSON file</strong> gives the <code>SamplingFrequency</code> in Hz and the <code>Columns</code>, in order. PEBBL uses columns named <code>ecg</code>, <code>ppg</code>, <code>rsp</code>, <code>eda</code>, <code>sbp</code>, <code>dbp</code> and <code>event</code>. It also uses <code>ecg_peaks</code> and <code>ppg_peaks</code>: 1 where the computer marked a peak, 0 elsewhere. A recording can have only some of these columns.</li>
+</ul>
+<p>PEBBL adds its own files beside each recording, named with the reviewer's initials. It keeps a <span class="path">processing_log.csv</span> in the data folder. For certification, a <span class="path">practice</span> folder sits next to the data folder.</p>
 </section>
 
 <footer>PEBBL: Physiology in the Emotion, Brain &amp; Behavior Lab, Tufts University. Please Eyeball Before Believing Labels.</footer>

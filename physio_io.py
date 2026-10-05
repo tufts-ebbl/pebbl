@@ -21,6 +21,7 @@ the three not passed in -- mirroring how the notebooks prompt for these
 same fields via their ipywidgets form.
 """
 
+import glob
 import gzip
 import json
 import os
@@ -40,8 +41,8 @@ REAL_PHYSIO_COLUMNS = [
 def resolve_box_path_and_subject(box_path, subject):
     """Prompts for box_path/subject if missing; normalizes subject to e.g. '001'."""
     if not box_path:
-        box_path = input("Box derivatives path "
-                          "(e.g. C:\\Users\\you\\Box\\DATA\\Processed\\physioProcessing\\derivatives): ").strip()
+        box_path = input("Data folder, the one holding the sub-XXX folders (for our lab, e.g. "
+                          "C:\\Users\\you\\Box\\DATA\\Processed\\physioProcessing\\derivatives): ").strip()
     if not subject:
         # No "next available subject" suggestion (HLU, 2026-09-27): RAs are
         # assigned files and look them up in the Google tracking spreadsheet.
@@ -56,6 +57,32 @@ def build_run_path(box_path, subject, run):
     sub_dir = f"sub-{subject}"
     file_stem = f"sub-{subject}_ses-run{run}_task-sdi"
     return os.path.join(box_path, sub_dir, f"ses-run{run}", "beh", f"{file_stem}_physio.tsv.gz")
+
+
+def find_run_path(box_path, subject, run):
+    """
+    The run's recording under box_path, whatever its task label (HLU,
+    2026-10-05: other studies aren't task-sdi). Our study's task-sdi path is
+    used whenever it exists, so nothing changes for it. Otherwise this looks
+    in the same sub-XXX/ses-runY/beh/ folder for
+    sub-XXX_ses-runY_task-<anything>_physio.tsv.gz:
+      - one match: that file;
+      - none: the task-sdi path (the caller reports it as missing);
+      - more than one: stops and lists them, since it can't tell which is meant.
+    """
+    default = build_run_path(box_path, subject, run)
+    if os.path.exists(default):
+        return default
+    folder, name = os.path.split(default)
+    prefix = name.split("_task-")[0] + "_task-"
+    matches = sorted(glob.glob(os.path.join(glob.escape(folder), glob.escape(prefix) + "*_physio.tsv.gz")))
+    if len(matches) > 1:
+        listed = "\n  ".join(os.path.basename(m) for m in matches)
+        raise SystemExit(f"More than one recording for subject {subject}, run "
+                         f"{str(run).replace('run', '').replace('ses-', '')} in {folder}:\n  {listed}\n"
+                         f"PEBBL can't tell which one to open. Move the extra one(s) out of that folder, "
+                         f"or ask the lab staff.")
+    return matches[0] if matches else default
 
 
 def resolve_real_input_path(input_path, box_path, subject, run):
@@ -75,7 +102,7 @@ def resolve_real_input_path(input_path, box_path, subject, run):
         run = input("Run (1 or 2): ").strip()
     run = run.replace("run", "").replace("ses-", "")
 
-    resolved_path = build_run_path(box_path, subject, run)
+    resolved_path = find_run_path(box_path, subject, run)
     print(f"Resolved input path: {resolved_path}")
     if not os.path.exists(resolved_path):
         raise SystemExit(
@@ -104,7 +131,7 @@ def resolve_subject_run_paths(input_run1, input_run2, box_path, subject):
         box_path, subject = resolve_box_path_and_subject(box_path, subject)
         paths = {}
         for run in ("1", "2"):
-            candidate = build_run_path(box_path, subject, run)
+            candidate = find_run_path(box_path, subject, run)
             paths[run] = candidate if os.path.exists(candidate) else None
 
     found = {run: p for run, p in paths.items() if p}

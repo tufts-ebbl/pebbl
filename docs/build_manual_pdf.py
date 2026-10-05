@@ -45,6 +45,9 @@ def browser():
 
 
 ICON_PNG = os.path.join(HERE, "img", "pebbl_icon.png")
+# The Windows icon for desktop shortcuts to "Start PEBBL.bat" (HLU, 2026-10-05), in PEBBL's main folder.
+ICON_ICO = os.path.join(os.path.dirname(HERE), "pebbl.ico")
+ICO_SIZES = [(s, s) for s in (16, 24, 32, 48, 64, 128, 256)]
 CORE_JS = os.path.join(os.path.dirname(HERE), "branding", "pebbl_core.js")
 ICON_PAGE = ("<!doctype html><html><head><meta charset='utf-8'>"
              "<link rel='stylesheet' href='https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@700&display=swap'>"
@@ -70,8 +73,14 @@ def render_icon(common):
         from PIL import Image
         image = Image.open(ICON_PNG).convert("RGBA")
         image = image.crop(image.getchannel("A").getbbox())
+        # The .ico from the full-size render: centered on a transparent square (icons are square).
+        side = max(image.size)
+        square = Image.new("RGBA", (side, side), (0, 0, 0, 0))
+        square.paste(image, ((side - image.width) // 2, (side - image.height) // 2))
+        square.save(ICON_ICO, format="ICO", sizes=ICO_SIZES)
         image.resize((240, round(240 * image.height / image.width)), Image.LANCZOS).save(ICON_PNG)
         print("wrote", ICON_PNG)
+        print("wrote", ICON_ICO)
     finally:
         os.remove(temp_html)
 

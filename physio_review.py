@@ -89,14 +89,15 @@ def parse_args(argv=None):
         "Step 1 builds your ECG template, Step 2 reviews a channel, Step 3 reconciles two reviewers."))
     parser.add_argument("--input-run1", type=str, default=None, help="Path to run 1's *_physio.tsv.gz.")
     parser.add_argument("--input-run2", type=str, default=None, help="Path to run 2's *_physio.tsv.gz.")
-    parser.add_argument("--box-path", type=str, default=None,
-                         help="Box derivatives folder. Used with --subject to find both runs' files. "
-                              "Prompted for if omitted (unless --input-run1/2 given).")
+    parser.add_argument("--box-path", "--data-path", dest="box_path", type=str, default=None,
+                         help="The data folder: the one holding the sub-XXX folders (for our lab, the Box "
+                              "derivatives folder; any folder works). Used with --subject to find both runs' "
+                              "files. Prompted for if omitted (unless --input-run1/2 given).")
     parser.add_argument("--subject", type=str, default=None,
                          help="Subject ID, e.g. '001' or 'sub-001'. Prompted for if omitted.")
     parser.add_argument("--local-path", type=str, default=None,
-                         help="Local folder to work from: this subject's files are copied here from Box, "
-                              "worked on, pushed back to Box, confirmed, then removed automatically -- "
+                         help="Local folder to work from: this subject's files are copied here from the "
+                              "data folder, worked on, copied back, confirmed, then removed automatically -- "
                               "matching the existing notebooks' own copy-locally-then-push workflow. "
                               "Prompted for if omitted (same as --box-path). Ignored with --synthetic, "
                               "--input-run1/2, or --no-local-copy.")
@@ -105,7 +106,8 @@ def parse_args(argv=None):
                               "--box-path (e.g. for troubleshooting, or if --box-path already points "
                               "at a local folder you're managing yourself).")
     parser.add_argument("--keep-local", action="store_true",
-                         help="Don't delete the local working copy after a successful push back to Box "
+                         help="Don't delete the local working copy after a successful copy back to the "
+                              "data folder "
                               "(for troubleshooting). The copy is always preserved if any file's push "
                               "can't be confirmed, regardless of this flag.")
     parser.add_argument("--run", type=str, default=None,
@@ -201,6 +203,16 @@ def _print_equivalent_command(argv):
     print("-" * 70 + "\n")
 
 
+# pebbl_launcher.py runs one session per process and then opens the form again
+# (HLU, 2026-10-05). These exit codes tell it what happened; it sets
+# PEBBL_LAUNCHER=1 so that only its sessions use SESSION_STOPPED_EXIT.
+# pebbl_launcher.py keeps its own copies of the two numbers (it imports
+# nothing from here), and test_pebbl_launcher.py checks they match.
+FORM_CANCELED_EXIT = 3     # the form was closed with Cancel: PEBBL closes
+SESSION_STOPPED_EXIT = 4   # a session ended early with its own message: the form opens again
+LAUNCHER_ENV = "PEBBL_LAUNCHER"
+
+
 def parse_args_or_show_gui():
     """
     If invoked with literally no command-line arguments, shows a simple
@@ -216,7 +228,8 @@ def parse_args_or_show_gui():
     from simple_gui import collect_inputs_via_gui
     values = collect_inputs_via_gui()
     if values is None:
-        raise SystemExit("Canceled.")
+        print("Canceled.")
+        raise SystemExit(FORM_CANCELED_EXIT)
 
     if values["synthetic"]:
         if values["stage"] == "3":
@@ -726,43 +739,44 @@ def _handle_leftover_local_copy(real_box_path, subject, local_root):
         return
     print("\n" + "!" * 70)
     print(f"A local copy of this subject from an earlier session is still in {local_root},")
-    print(f"and {len(unpushed)} file(s) in it were never copied back to Box:")
+    print(f"and {len(unpushed)} file(s) in it were never copied back to the data folder:")
     for relpath in unpushed:
         print(f"  - {relpath}")
     print("!" * 70)
-    answer = input("Copy these file(s) to Box now, then continue? [y/N]: ").strip().lower()
+    answer = input("Copy these file(s) to the data folder now, then continue? [y/N]: ").strip().lower()
     if answer not in ("y", "yes"):
         raise SystemExit(f"Stopped without changing anything. The leftover local copy is still in {local_root}. "
-                         f"Copy those file(s) to Box (or ask for help), then start again.")
+                         f"Copy those file(s) to the data folder (or ask for help), then start again.")
     confirmed, failed = push_changed_files_to_box(local_root, real_box_path, unpushed)
     for relpath in confirmed:
-        print(f"  confirmed on Box: {relpath}")
+        print(f"  confirmed in the data folder: {relpath}")
     if failed:
-        raise SystemExit(f"Could not confirm {len(failed)} file(s) reached Box: {failed}. Nothing was deleted; "
-                         f"the local copy is still in {local_root}. Copy them to Box yourself, then start again.")
+        raise SystemExit(f"Could not confirm {len(failed)} file(s) reached the data folder: {failed}. Nothing was "
+                         f"deleted; the local copy is still in {local_root}. Copy them to the data folder yourself, "
+                         f"then start again.")
 
 
 def _push_back_to_box(args, local_root, real_box_path, before_snapshot):
     """Pushes new/changed files, confirms them, and cleans up -- the end of the local-copy lifecycle."""
     changed = find_changed_files(local_root, args.subject, before_snapshot)
     if not changed:
-        print("No new or changed files this session -- nothing to push back to Box.")
+        print("No new or changed files this session -- nothing to copy back to the data folder.")
         if not args.keep_local:
             cleanup_local_copy(local_root, args.subject)
         return
 
-    print(f"\nPushing {len(changed)} new/changed file(s) back to Box:")
+    print(f"\nCopying {len(changed)} new/changed file(s) back to the data folder:")
     confirmed, failed = push_changed_files_to_box(local_root, real_box_path, changed)
     for relpath in confirmed:
-        print(f"  confirmed on Box: {relpath}")
+        print(f"  confirmed in the data folder: {relpath}")
 
     if failed:
         print("\n" + "!" * 70)
-        print(f"WARNING: could not confirm {len(failed)} file(s) made it back to Box:")
+        print(f"WARNING: could not confirm {len(failed)} file(s) made it back to the data folder:")
         for relpath in failed:
             print(f"  - {relpath}")
         print(f"Your local working copy is PRESERVED at {local_root} -- please check these file(s) "
-              f"manually and copy them to Box yourself. Nothing has been deleted.")
+              f"manually and copy them to the data folder yourself. Nothing has been deleted.")
         print("!" * 70 + "\n")
         return
 
@@ -770,7 +784,7 @@ def _push_back_to_box(args, local_root, real_box_path, before_snapshot):
         print(f"--keep-local: local working copy preserved at {local_root}.")
     else:
         cleanup_local_copy(local_root, args.subject)
-        print("Local working copy removed -- all changes confirmed on Box.")
+        print("Local working copy removed -- all changes confirmed in the data folder.")
 
 
 def _tracker_names(info):
@@ -908,7 +922,7 @@ def _main(session_log):
         if use_local_copy:
             if not args.local_path:
                 args.local_path = input(
-                    "Local working folder (this subject's files are copied here from Box, worked on, "
+                    "Local working folder (this subject's files are copied here from the data folder, worked on, "
                     "pushed back, confirmed, then removed automatically when the session finishes): "
                 ).strip()
             if not args.local_path:
@@ -957,6 +971,10 @@ def _main(session_log):
 
     _print_tracker_reminder(info)
 
+    if exit_code and os.environ.get(LAUNCHER_ENV) and exit_code != 130:
+        # Under the launcher, a session that stopped (its message is printed
+        # above) goes back to the form; Ctrl-C (130) still closes PEBBL.
+        exit_code = SESSION_STOPPED_EXIT
     if exit_code:
         if pending_exit is not None:
             # The message was already printed above the reminder; exiting with

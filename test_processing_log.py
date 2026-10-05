@@ -130,6 +130,20 @@ def main():
             assert snapshot_content_after != box_content, "snapshot should have changed, not stayed stale"
             print("   OK: snapshot reflects the most recently written box-hosted log")
 
+        print("9. The snapshot's default place (HLU, 2026-10-05): the user's home folder for an installed "
+              "copy (its own git clone, e.g. the shared lab install), the folder above for a development "
+              "checkout...")
+        install = os.path.join(tmp_dir, "Public", "Downloads", "pebbl")
+        os.makedirs(os.path.join(install, ".git"))
+        assert processing_log.default_snapshot_dir(install) == os.path.expanduser("~"), \
+            "never the shared folder above a lab install"
+        dev = os.path.join(tmp_dir, "physioCorrection", "multisignal_annotation")
+        os.makedirs(dev)
+        assert processing_log.default_snapshot_dir(dev) == os.path.join(tmp_dir, "physioCorrection")
+        here = os.path.dirname(os.path.abspath(processing_log.__file__))
+        assert processing_log.LOCAL_SNAPSHOT_DIR == processing_log.default_snapshot_dir(here)
+        print("   OK: home folder for an install; the folder above for a development checkout")
+
         print("\nALL PROCESSING_LOG TESTS PASSED.")
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)

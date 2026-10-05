@@ -552,6 +552,42 @@ def main():
                   "compare opens the run-1 key view; Step 3 refused; missing key reported; the form's box "
                   "becomes --practice; the real log's local snapshot untouched")
 
+            print("20. Exit codes for the launcher's back-to-the-form loop (HLU, 2026-10-05): Cancel on the form is "
+                  "3; under PEBBL_LAUNCHER=1 a session that stops with a message is 4 (form again) and Ctrl-C stays "
+                  "130; without the launcher a stop is still 1...")
+            loop_dir = tempfile.mkdtemp(dir=tmp_dir)
+            with patch.object(sys, "argv", ["physio_review.py"]), \
+                 patch("simple_gui.collect_inputs_via_gui", return_value=None), \
+                 contextlib.redirect_stdout(io.StringIO()) as out:
+                try:
+                    physio_review.main()
+                    raise AssertionError("Cancel should exit")
+                except SystemExit as e:
+                    assert e.code == physio_review.FORM_CANCELED_EXIT == 3, e.code
+            assert "Canceled." in out.getvalue()
+            stop = ["--synthetic", "--duration", "30", "--run", "3", "--initials", "lgx", "--out-dir", loop_dir,
+                    "--stage", "2", "--channels", "rsp"]
+            for env, expected in (({"PEBBL_LAUNCHER": "1"}, physio_review.SESSION_STOPPED_EXIT), ({}, 1)):
+                with patch.dict(os.environ, env), contextlib.redirect_stdout(io.StringIO()) as out:
+                    if not env:
+                        os.environ.pop("PEBBL_LAUNCHER", None)  # patch.dict restores it afterwards
+                    try:
+                        run_main(stop)
+                        raise AssertionError("run 3 doesn't exist: the session should stop")
+                    except SystemExit as e:
+                        assert e.code == expected, (env, e.code)
+                assert "Run 3 isn't available" in out.getvalue()
+            with patch.dict(os.environ, {"PEBBL_LAUNCHER": "1"}), \
+                 patch.object(physio_review, "run_stage_b", side_effect=KeyboardInterrupt), \
+                 contextlib.redirect_stdout(io.StringIO()):
+                try:
+                    run_main(["--synthetic", "--duration", "30", "--run", "1", "--initials", "lgx", "--out-dir",
+                              loop_dir, "--stage", "2", "--channels", "rsp"])
+                    raise AssertionError("Ctrl-C should exit")
+                except SystemExit as e:
+                    assert e.code == 130, e.code
+            print("   OK: Cancel 3; a stopped session 4 under the launcher, 1 otherwise; Ctrl-C 130")
+
         print("\nALL PHYSIO_REVIEW ORCHESTRATION TESTS PASSED.")
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)

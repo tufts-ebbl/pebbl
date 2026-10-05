@@ -57,7 +57,15 @@ The start scripts run `pebbl_launcher.py`, which:
 - pulls the latest version (`git pull --ff-only`, only in a clone of its own;
   never in this development folder);
 - reinstalls the requirements when `requirements.txt` changed;
-- opens the form.
+- opens the form, one session per process, and opens it again after each
+  session (HLU, 2026-10-05).
+  - It sets `PEBBL_LAUNCHER=1`. physio_review then exits 3 when the form is
+    canceled (which closes PEBBL), and 4 when a session stops with its own
+    message (which reopens the form, like a finished session's 0).
+  - Ctrl-C (130), or any other failure such as an error before the form
+    opens, closes PEBBL, so a broken update can't loop.
+  - Each session finishes completely (copy back, cleanup, session log) before
+    the next form appears.
 
 The scripts set `PEBBL_NO_PAUSE=1` to skip their "press any key" pauses for
 automated tests. `.gitattributes` keeps the `.bat` files CRLF and the Mac
@@ -98,8 +106,13 @@ Run it with **zero flags** and a small window pops up asking:
 - **Step 1: Build ECG QRS template**, **Step 2: Review a channel**, or
   **Step 3: Reconcile two reviewers** (Step 2 is preselected, as the more
   common day-to-day action).
-- Box derivatives path (with a Browse... button), a local working folder
-  (also with Browse..., see "Working from Box" below), and subject.
+- **Data folder** (with a Browse... button): any folder holding the sub-XXX
+  folders; for our lab, the Box derivatives folder (labeled "Box derivatives
+  path" until 2026-10-05; `--box-path` and its alias `--data-path`). PEBBL
+  finds each run's `sub-XXX_ses-runY_task-<any>_physio.tsv.gz`, preferring
+  our `task-sdi` file whenever it exists (`physio_io.find_run_path`). Also a
+  local working folder (with Browse..., see "Working from Box" below) and
+  the subject.
 - If Step 2 or Step 3: which run, and **which single channel** to
   review/reconcile (defaults to ECG) -- reviewing every available channel
   at once turned out to be too busy in practice, so the form asks for one
@@ -487,9 +500,15 @@ records what the machine flagged (`seed`).
     screen it can look like fast, uneven breathing (from run 8 the
     breathing filter keeps fast breathing at full size). From run 9 the
     test only flags a belt that isn't recording (std < 5e-5 V), so breath
-    pauses and holds are no longer flagged. **Mark RSP bad only where the
-    belt stopped recording: if you can see breaths, it's not bad**, however
-    odd they look (pauses, holds, sighs, very shallow breathing).
+    pauses and holds are no longer flagged. **Mark RSP bad wherever you
+    can't see where each breath peaks** (HLU, 2026-10-05: "it's not possible
+    to reliably place a peak that one can't see"). That covers a flat line,
+    whether the belt stopped or a breath was held, and clipped tops cut flat
+    at the recording's maximum. Breaths whose peaks show are not bad,
+    however odd they look (sighs, very shallow breathing, pauses between
+    breaths). This replaces the 2026-09-26 rule "mark only where the belt
+    stopped; if you can see breaths, it's not bad", which left clipping and
+    holds alone.
   - **EDA:** out of range (0.05-60 µS) or too steep (10 µS/s) on a smoothed
     copy, plus 0.5 s each side. It catches sustained faults only, and misses
     artifacts shorter than about 5 s: **mark brief EDA artifacts yourself.**
@@ -897,6 +916,11 @@ existing notebooks' own convention (same filename, same location), so
 there's one shared, most-recent snapshot regardless of which tool wrote
 last. The real log always lives on Box; this is just a convenience copy
 that goes stale the moment anyone else processes data, hence the name.
+An **installed** copy (a clone of the public repo, such as the shared lab
+install in `C:\Users\Public\Downloads\pebbl`) writes the snapshot to the
+user's own home folder instead, because the log holds participant IDs, RA
+initials and comments, and the folder above a shared install is readable by
+everyone (2026-10-05; `processing_log.default_snapshot_dir()`).
 
 ### Choosing the ECG seed source: `--ecg-source`
 
@@ -1008,8 +1032,8 @@ one side: `--compare-initials <trainee>,<your_own_initials>`.
 A simulated practice participant, **sub-990**, with **runs 1 and 2** (180 s
 each, every channel the real files have, built with neurokit2's
 simulators), deliberate mistakes in the machine's marks, real-but-odd
-"traps", and an **answer key** (the gold standard). Key version 5
-(2026-10-04); older practice folders and keys can't be scored by this
+"traps", and an **answer key** (the gold standard). Key version 7
+(2026-10-05); older practice folders and keys can't be scored by this
 version, so make a new folder.
 
 1. **Lab staff make it once**, in a `practice` folder next to the Box
@@ -1049,9 +1073,9 @@ version, so make a new folder.
 
 | Channel | To fix | Traps: real, keep or leave unmarked | Machine marks it starts with |
 |---|---|---|---|
-| ECG | scanner-like signal: tall T waves (taller in one stretch), spikes, 4 s of heavy noise to mark `bad_ecg`; the `ecg_peaks` seed also has 3 missed beats, 2 marks on T waves and 1 misplaced | a premature beat with its compensatory pause | — |
-| PPG | 3 missed pulses, 2 marks on the dicrotic wave, 1 on the upslope, a device dropout (mark `bad_ppg`) with a spurious seed in it | the weak pulse after the premature beat; 4 two-humped pulses seeded on the other hump (either hump passes) | the dropout (`zero_run`) |
-| RSP | 2 stretches where the belt stopped (flat) | a sigh, a breath hold, shallow breathing, clipped breath tops | flags one dead stretch, misses the other, falsely flags the breath hold |
+| ECG | scanner-like signal: tall T waves (taller in one stretch), spikes, 4 s of heavy noise to mark `bad_ecg`; the `ecg_peaks` seed also has 3 missed beats, 2 marks on T waves and 1 misplaced | a premature ventricular beat (wide, oddly shaped, large T wave pointing the other way) with its compensatory pause | — |
+| PPG | 3 missed pulses, 2 marks on the dicrotic wave, 1 on the upslope, a device dropout (mark `bad_ppg`) with a spurious seed in it; the weak, odd pulse after the premature beat (mark `bad_ppg`; the machine doesn't) | 4 two-humped pulses seeded on the other hump (either hump passes) | the dropout (`zero_run`) |
+| RSP | 2 stretches where the belt stopped (flat); a held breath (flat); clipped breath tops (deep breaths cut flat at the run's maximum) | a sigh (one whole breath, twice as deep), shallow breathing (eases in and out) | flags the held breath, the clipping and one dead stretch, misses the other, falsely flags the shallow breathing |
 | EDA | electrode lift, motion spikes, stuck sensor (flat) | 5 real skin conductance responses | flags the lift and spikes, misses the flat stretch, falsely flags one SCR |
 | SBP / DBP | leading blank, recalibration (held flat), implausible spike, a no-reading blank, a 1.2-s gap, BP inside the PPG dropout | — | flags all but the spike; falsely flags 6 s of clean BP |
 
@@ -1067,7 +1091,8 @@ finger temperature aren't in the practice file, as in the real data.
 - **Bad stretches (`bad_ecg`, `bad_ppg`, RSP, EDA, SBP, DBP):**
   - every artifact at least 80% covered (including the one the machine missed);
   - no trap, and no machine false flag, more than 25% still covered;
-  - at most 2 s marked outside the artifacts, with 1 s of leeway around each.
+  - at most 2 s marked outside the artifacts, with 1 s of leeway around each
+    (2 s around the PPG dropout, `DROPOUT_LEEWAY_SEC`; HLU, 2026-10-05).
 
 ## The session log
 

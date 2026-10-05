@@ -41,7 +41,27 @@ LOG_COLUMNS = ["Subject", "Run", "Initials", "Step", "Notes", "Timestamp", "Valu
 # append_processing_log_entry() against a fake/temp box_path would still
 # overwrite the user's REAL local snapshot with test garbage, since the
 # snapshot destination doesn't depend on box_path at all.
-LOCAL_SNAPSHOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+#
+# Installed copies (HLU, 2026-10-05) put it in the user's home folder
+# instead. On a lab computer, PEBBL is one shared clone of the public repo
+# in C:\Users\Public\Downloads\pebbl, and the folder above it is readable by
+# every account. The log holds participant IDs, RA initials and comments,
+# so the copy has to stay in each user's own folder. A personal install in
+# ~/pebbl already wrote to the home folder, so nothing changes for it.
+def default_snapshot_dir(tool_dir=None):
+    """
+    Where the read-only snapshot goes. An installed copy (the tool folder is
+    its own git clone, as pebbl_launcher.py checks) uses the user's home
+    folder. A development checkout (this folder inside physioCorrection/)
+    keeps the notebooks' place, the folder above it.
+    """
+    tool_dir = tool_dir or os.path.dirname(os.path.abspath(__file__))
+    if os.path.isdir(os.path.join(tool_dir, ".git")):
+        return os.path.expanduser("~")
+    return os.path.dirname(tool_dir)
+
+
+LOCAL_SNAPSHOT_DIR = default_snapshot_dir()
 LOCAL_SNAPSHOT_FILENAME = "processing_log_READONLY_SNAPSHOT.csv"
 
 

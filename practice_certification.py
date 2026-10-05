@@ -49,11 +49,11 @@ automatic detections)
     "don't move a mark between humps", 2026-10-04). Beats inside the RA's own
     bad stretches are excused; the bad stretches themselves are scored as the
     bad_ecg/bad_ppg channel. Missed beats and extra marks are listed with
-    their times; the premature beat (ECG) and its weak pulse (PPG) must be
-    kept.
+    their times; the premature beat (ECG) must be kept. Its weak, odd
+    pulse (PPG) is a bad_ppg stretch to mark (HLU, 2026-10-05).
   Segment channels: every artifact at least 80% marked, no real event or
     machine false flag more than 25% marked, at most 2 s marked outside the
-    artifacts (1 s of leeway around each).
+    artifacts (1 s of leeway around each; 2 s around the PPG dropout).
 
 Usage (lab staff)
   annotate_env\\Scripts\\python.exe practice_certification.py make --out-dir "<Box>\\DATA\\Processed\\physioProcessing\\practice"
@@ -77,7 +77,9 @@ FS = 1000
 DURATION_SEC = 180
 PRACTICE_SUBJECT = "990"
 RUNS = ("1", "2")
-KEY_VERSION = 5  # 5 (2026-10-04): neurokit2 signals, runs 1 and 2, outcome scoring, key in the practice folder
+KEY_VERSION = 7  # 5 (2026-10-04): neurokit2 signals, runs 1 and 2, outcome scoring, key in the practice folder
+#                 6 (2026-10-05, HLU's practice run): a textbook PVC; RSP flat hold and real clipping are artifacts
+#                 7 (2026-10-05, HLU): the weak pulse after the PVC is a bad_ppg stretch to mark, not a pulse to keep
 KEY_FILENAME = "practice_key.pebbl"
 KEY_HEADER = "PEBBL practice answer key (encoded; lab staff: practice_certification.py score)\n"
 
@@ -89,6 +91,13 @@ PASS_CRITERIA = {
     "artifact_leeway_sec": 1.0,
 }
 
+# Scoring skips the first 0.5 s and last 1.0 s of a run (HLU, 2026-10-05): the key leaves out beats cut off
+# at the ends (the last 0.6 s), so a correct mark on a visible beat there was counted as "extra".
+EDGE_SEC = (0.5, 1.0)
+# Marking up to this far on either side of the PPG dropout is fine (HLU, 2026-10-05: the 1 s leeway was
+# too tight there; the machine already pre-marks 0.6 s each side, and RAs round out to the next pulses).
+DROPOUT_LEEWAY_SEC = 2.0
+PVC_COUPLING = 0.66        # the premature beat comes this far through the normal beat-to-beat interval
 PPG_HUMP_GAP = 0.12        # s between the early and the main systolic hump
 PPG_PULSE_DELAY = 0.30     # s from the R peak to the pulse's main hump
 PPG_MASK_DILATION = 600    # samples each side, as physioProcess widens zero runs
@@ -178,16 +187,19 @@ def _build_ecg(rng, plan, n, t):
     baseline = float(np.median(clean))
     r_amp = float(np.median(clean[r])) - baseline
 
-    # A premature (ectopic) beat: remove beat k and put a wide beat 62% of the way from beat k-1,
-    # so the next beat keeps its time (a compensatory pause).
+    # A premature ventricular beat (PVC): remove beat k and put a wide, oddly shaped beat with a large
+    # T wave pointing the other way PVC_COUPLING of the way from beat k-1, after that beat's T wave; the
+    # next beat keeps its time (a full compensatory pause). HLU (2026-10-05): v5's PVC was narrow, sat on
+    # the previous T wave and looked like an artifact; this one has the textbook shape (QRS about 0.16 s).
     k = max(1, min(len(r) - 2, _nearest(r / FS, plan["pvc_at"])))
     lo, hi = int(r[k] - 0.30 * FS), int(r[k] + 0.45 * FS)
     ecg[lo:hi] = np.linspace(ecg[lo], ecg[hi], hi - lo)
-    pvc_t = (r[k - 1] + 0.62 * (r[k] - r[k - 1])) / FS
-    plo, phi = int((pvc_t - 0.15) * FS), int((pvc_t + 0.55) * FS)
+    pvc_t = (r[k - 1] + PVC_COUPLING * (r[k] - r[k - 1])) / FS
+    plo, phi = int((pvc_t - 0.20) * FS), int((pvc_t + 0.65) * FS)
     tt = t[plo:phi]
-    ecg[plo:phi] += (_gauss(tt, pvc_t, 0.022, 1.35 * r_amp) + _gauss(tt, pvc_t + 0.05, 0.03, -0.35 * r_amp)
-                     + _gauss(tt, pvc_t + 0.30, 0.06, -0.30 * r_amp))
+    ecg[plo:phi] += (_gauss(tt, pvc_t, 0.032, 1.5 * r_amp)              # broad R
+                     + _gauss(tt, pvc_t + 0.075, 0.032, -0.55 * r_amp)  # deep, broad S
+                     + _gauss(tt, pvc_t + 0.29, 0.095, -0.70 * r_amp))  # large T, opposite to the QRS
     pvc_r = _refine_max(ecg, int(round(pvc_t * FS)))
     true_r = np.asarray(sorted([int(x) for i, x in enumerate(r) if i != k] + [pvc_r]))
 
@@ -221,7 +233,11 @@ def _build_ecg(rng, plan, n, t):
     ecg[nlo:nhi] += burst
     artifacts = [{"type": "heavy scanner noise: R peaks can't be found here (mark it bad_ecg)", "start": nlo,
                   "end": nhi}]
-    return ecg, true_r, pvc_r, artifacts
+    # The PVC's top is rounded, so its key sample is the highest point of the FINAL signal (after the
+    # noise), which is where a reviewer's box over it lands.
+    final_pvc = _refine_max(ecg, pvc_r, half=30)
+    true_r = np.where(true_r == pvc_r, final_pvc, true_r)
+    return ecg, true_r, final_pvc, artifacts
 
 
 def _seed_with_errors(signal, true_peaks, detected, plan_missed, plan_extra, plan_misplaced, protect, rng):
@@ -298,6 +314,13 @@ def _build_ppg(rng, plan, n, t, true_r, pvc_r):
     accept = [p[2] for p in pulses]
     flip_crest = {p[1]: min(p[2]) for p in pulses if p[0] in flips and len(p[2]) > 1}
     pvc_top = next(p[1] for p in pulses if p[0] == pvc_i)
+    # The weak pulse after the premature beat, trough to trough: HLU (2026-10-05) reads it as an
+    # artifact and wants it marked bad_ppg, since a peak you can't trust can't be placed reliably.
+    # It runs from the trough before it to the end of its own wave (top + 0.45 s, past its dicrotic
+    # wave), not across the quiet pause after it, so marking the odd pulse itself is enough.
+    j = int(np.searchsorted(tops, pvc_top))
+    weak_lo = int(tops[j - 1] + np.argmin(ppg[tops[j - 1]:pvc_top]))
+    weak_hi = int(min(pvc_top + 0.45 * FS, pvc_top + np.argmin(ppg[pvc_top:tops[j + 1]])))
 
     # The machine's marks: every pulse top (on the early hump on some beats, as the machine does), plus mistakes.
     detected = [flip_crest.get(top, top) for top in tops]
@@ -307,7 +330,16 @@ def _build_ppg(rng, plan, n, t, true_r, pvc_r):
     arc = [i for i in range(drop_lo + 60, drop_hi - 60) if ppg[i] == ppg[i - 50:i + 51].max()]
     if arc:
         seed = sorted(set(seed) | {max(arc, key=lambda i: ppg[i])})  # a machine mark on the dropout's arc
-    return ppg, tops, accept, pvc_top, seed, (drop_lo, drop_hi)
+    return ppg, tops, accept, pvc_top, seed, (drop_lo, drop_hi), (weak_lo, weak_hi)
+
+
+def _taper(length, ease_sec=1.5):
+    """0 at both ends rising to 1 over ease_sec (a raised cosine), for changes that ease in and out."""
+    taper = np.ones(length)
+    edge = min(int(ease_sec * FS), length // 3)
+    taper[:edge] = 0.5 - 0.5 * np.cos(np.linspace(0, np.pi, edge))
+    taper[length - edge:] = taper[:edge][::-1]
+    return taper
 
 
 def _build_rsp(rng, plan, n, t):
@@ -322,39 +354,61 @@ def _build_rsp(rng, plan, n, t):
     bottom = float(np.percentile(rsp[troughs], 50))
     traps = []
 
-    # A sigh: one breath twice as deep.
-    j = max(0, min(len(troughs) - 2, _nearest(troughs / FS, plan["rsp_sigh"])))
+    # A sigh: one whole breath (trough to trough, 2.5-8 s) twice as deep. v5 took the nearest two
+    # detected troughs, which in run 2 were 0.17 s apart, so that run had no visible sigh.
+    gaps = np.diff(troughs) / FS
+    whole = np.flatnonzero((gaps >= 2.5) & (gaps <= 8.0))
+    j = int(whole[np.argmin(np.abs(troughs[whole] / FS - plan["rsp_sigh"]))])
     a, b = troughs[j], troughs[j + 1]
     line = np.linspace(rsp[a], rsp[b], b - a)
-    rsp[a:b] = line + (rsp[a:b] - line) * 2.2
+    rsp[a:b] = line + (rsp[a:b] - line) * 2.0
     traps.append({"type": "a sigh (one deep breath): real, leave it", "start": int(a), "end": int(b)})
 
-    # A breath hold after breathing in: level, with a small heartbeat ripple.
+    # The RSP rule (HLU, 2026-10-05): mark bad wherever you can't see where each breath peaks, because
+    # "it's not possible to reliably place a peak that one can't see". So a flat stretch (here a held
+    # breath) and clipped tops are artifacts; a sigh and shallow breathing, whose peaks show, are not.
+    artifacts = []
+
+    # A held breath after breathing in: flat, with a small heartbeat ripple. No breath peaks: bad.
     h0 = peaks[_nearest(peaks / FS, plan["rsp_hold"][0])]
     h1 = h0 + int(plan["rsp_hold"][1] * FS)
     hold = rsp[h0] + 0.02 * (top - bottom) * np.sin(2 * np.pi * 1.2 * t[: h1 - h0]) + rng.normal(0, 0.003, h1 - h0)
     ramp = np.linspace(0, 1, 500)
     rsp[h0:h1] = hold
     rsp[h1:h1 + 500] = hold[-1] * (1 - ramp) + rsp[h1:h1 + 500] * ramp
-    hold_span = {"type": "a breath hold: real, leave it", "start": int(h0), "end": int(h1)}
-    traps.append(hold_span)
+    artifacts.append({"type": "flat line (a held breath): no breath peaks to see, mark it bad", "start": int(h0),
+                      "end": int(h1)})
 
-    # Shallow breathing and clipped tops: breaths are still visible, so not bad.
+    # Shallow breathing: the breaths and their peaks still show, so not bad. It eases in and out over
+    # 1.5 s (v5 switched abruptly, leaving a step an RA could take for an artifact).
     s0, s1 = _span(*plan["rsp_shallow"])
     mean = float(np.mean(rsp[s0:s1]))
-    rsp[s0:s1] = mean + (rsp[s0:s1] - mean) * 0.35
+    rsp[s0:s1] = mean + (rsp[s0:s1] - mean) * (1 - 0.65 * _taper(s1 - s0))
     traps.append({"type": "shallow breathing: real, leave it", "start": s0, "end": s1})
+
+    # Real clipping: a few deep in-breaths (from normal troughs) run past the belt's ceiling, the highest
+    # value in the run (just above the sigh's top), so their tops are cut flat there. v5 cut breaths at
+    # 60% of a normal breath, below breaths elsewhere, which isn't clipping. The depth eases in and out
+    # over 1.5 s. The artifact runs from the trough before the first cut top to the trough after the last.
     c0, c1 = _span(*plan["rsp_clip"])
-    rsp[c0:c1] = np.minimum(rsp[c0:c1], bottom + 0.6 * (top - bottom))
-    traps.append({"type": "clipped breath tops: breaths still visible, leave it", "start": c0, "end": c1})
+    ceiling = float(max(rsp[:c0].max(), rsp[c1:].max())) + 0.03 * (top - bottom)  # just above the sigh
+    base = float(np.percentile(rsp[c0:c1], 5))
+    local_top = float(np.percentile(rsp[c0:c1], 95))
+    depth = max(1.6, 1.25 * (ceiling - base) / max(local_top - base, 1e-9))
+    rsp[c0:c1] = np.minimum(base + (rsp[c0:c1] - base) * (1 + (depth - 1) * _taper(c1 - c0)), ceiling)
+    cut = c0 + np.flatnonzero(rsp[c0:c1] >= ceiling)
+    before, after = troughs[troughs <= cut[0]], troughs[troughs >= cut[-1]]
+    k0 = int(before[-1]) if len(before) else c0
+    k1 = int(after[0]) if len(after) else c1
+    artifacts.append({"type": "clipped breath tops (the belt hit its maximum): no breath peaks to see, mark it bad",
+                      "start": k0, "end": k1})
 
     # The belt stopped recording: a dead-flat line.
-    artifacts = []
     for start, length in plan["rsp_dead"]:
         d0, d1 = _span(start, length)
         rsp[d0:d1] = bottom - 0.15 * (top - bottom) + rng.normal(0, 2e-5, d1 - d0)
         artifacts.append({"type": "belt stopped recording (flat line)", "start": d0, "end": d1})
-    return rsp, peaks, artifacts, traps, hold_span
+    return rsp, peaks, artifacts, traps
 
 
 def _build_eda(rng, plan, n, t):
@@ -434,16 +488,17 @@ def build_run(seed, run):
                        "traps": [{"type": "the premature (early) beat: real, keep its mark", "sample": int(pvc_r)}]}
     channels["bad_ecg"] = {"mode": "segment", "artifacts": ecg_art, "traps": []}
 
-    ppg, tops, accept, pvc_top, ppg_seed, dropout = _build_ppg(rng, plan, n, t, true_r, pvc_r)
+    ppg, tops, accept, pvc_top, ppg_seed, dropout, weak = _build_ppg(rng, plan, n, t, true_r, pvc_r)
     channels["ppg"] = {"mode": "point", "true_peaks": [int(x) for x in tops],
                        "accept": [[int(c) for c in a] for a in accept],
-                       "traps": [{"type": "the weak pulse after the premature beat: real, keep its mark",
-                                  "sample": int(pvc_top)}]}
+                       "traps": []}
     channels["bad_ppg"] = {"mode": "segment", "traps": [], "artifacts": [
         {"type": "finger-pulse dropout (a low, smooth arc): mark it bad_ppg", "start": dropout[0],
-         "end": dropout[1]}]}
+         "end": dropout[1], "leeway_sec": DROPOUT_LEEWAY_SEC},
+        {"type": "the weak, odd pulse after the premature beat: mark it bad_ppg", "start": weak[0],
+         "end": weak[1]}]}
 
-    rsp, rsp_peaks, rsp_art, rsp_traps, hold_span = _build_rsp(rng, plan, n, t)
+    rsp, rsp_peaks, rsp_art, rsp_traps = _build_rsp(rng, plan, n, t)
     channels["rsp"] = {"mode": "segment", "artifacts": rsp_art, "traps": rsp_traps}
     eda, eda_art, eda_traps = _build_eda(rng, plan, n, t)
     channels["eda"] = {"mode": "segment", "artifacts": eda_art, "traps": eda_traps}
@@ -461,11 +516,11 @@ def build_run(seed, run):
         "ecg_peaks": _peaks_column(ecg_seed, n), "rsp_peaks": _peaks_column(rsp_peaks, n),
         "ppg_peaks": _peaks_column(ppg_seed, n), "eda_peaks": np.zeros(n, dtype=bool), "event": event,
     })[COLUMNS]
-    machine_qc = _plant_machine_qc(channels, plan, n, dropout, hold_span)
+    machine_qc = _plant_machine_qc(channels, plan, n, dropout)
     return df, {"n_samples": n, "channels": channels}, machine_qc
 
 
-def _plant_machine_qc(channels, plan, n, dropout, hold_span):
+def _plant_machine_qc(channels, plan, n, dropout):
     """
     A MachineQC block shaped like physioProcess's, deliberately partly wrong:
     per channel it flags some artifacts, MISSES one, and FALSELY flags one
@@ -475,14 +530,15 @@ def _plant_machine_qc(channels, plan, n, dropout, hold_span):
         return [int(item["start"]), int(item["end"])]
 
     scr = channels["eda"]["traps"][1]
+    shallow = next(t for t in channels["rsp"]["traps"] if t["type"].startswith("shallow"))
     false_flags = {
-        "rsp": ("the breath hold (flagged by mistake)", span(hold_span)),
+        "rsp": ("shallow breathing (flagged by mistake)", span(shallow)),
         "eda": ("a real skin conductance response (flagged by mistake)", span(scr)),
         "sbp": ("clean blood pressure (flagged by mistake)", list(_span(*plan["bp_false"]["sbp"]))),
         "dbp": ("clean blood pressure (flagged by mistake)", list(_span(*plan["bp_false"]["dbp"]))),
     }
     # (indices of the artifacts the machine flags; index of the one it misses)
-    flagged = {"rsp": ((0,), 1), "eda": ((0, 1), 2), "sbp": ((0, 1, 3, 4, 5), 2), "dbp": ((0, 1, 3, 4, 5), 2)}
+    flagged = {"rsp": ((0, 1, 2), 3), "eda": ((0, 1), 2), "sbp": ((0, 1, 3, 4, 5), 2), "dbp": ((0, 1, 3, 4, 5), 2)}
     qc = {}
     for ch, (flag_idx, miss_idx) in flagged.items():
         artifacts = channels[ch]["artifacts"]
@@ -579,11 +635,18 @@ def _times(samples, limit=8):
     return shown + (" s" if len(samples) <= limit else f" s, and {len(samples) - limit} more")
 
 
-def match_point_channel(truth, final_indices, tol, bad_stretches=()):
+def _in_edge(sample, n_samples):
+    """True in the unscored first/last seconds of a run (EDGE_SEC); never without n_samples."""
+    return bool(n_samples) and (sample < EDGE_SEC[0] * FS or sample >= n_samples - EDGE_SEC[1] * FS)
+
+
+def match_point_channel(truth, final_indices, tol, bad_stretches=(), n_samples=None):
     """
     Pairs marks with true beats. Returns (matches {beat index: mark}, missed
     beat tops, extra marks, excused beat tops). A beat matches the nearest
     unused mark within tol of any of its acceptable positions (PPG: any crest).
+    With n_samples, the first/last EDGE_SEC seconds aren't scored: a beat
+    there isn't required and a mark there isn't extra.
     """
     final = sorted(int(x) for x in final_indices)
     accept = truth.get("accept") or [[p] for p in truth["true_peaks"]]
@@ -596,19 +659,22 @@ def match_point_channel(truth, final_indices, tol, bad_stretches=()):
             mark = min(candidates)[1]
             used.add(mark)
             matches[i] = mark
+        elif _in_edge(tops[i], n_samples):
+            continue
         elif any(a <= tops[i] < b for a, b in bad_stretches):
             excused.append(tops[i])
         else:
             missed.append(tops[i])
-    extra = [m for m in final if m not in used and not any(a <= m < b for a, b in bad_stretches)]
+    extra = [m for m in final if m not in used and not any(a <= m < b for a, b in bad_stretches)
+             and not _in_edge(m, n_samples)]
     return matches, missed, extra, excused
 
 
-def score_point_channel(ch, truth, final_indices, criteria, bad_stretches=()):
+def score_point_channel(ch, truth, final_indices, criteria, bad_stretches=(), n_samples=None):
     tol = round(criteria["tolerance_ms"][ch] * FS / 1000)
     what = "heartbeat" if ch == "ecg" else "pulse"
-    matches, missed, extra, excused = match_point_channel(truth, final_indices, tol, bad_stretches)
-    total = len(truth["true_peaks"])
+    matches, missed, extra, excused = match_point_channel(truth, final_indices, tol, bad_stretches, n_samples)
+    total = len(matches) + len(missed) + len(excused)
     lines = [f"  {len(matches)} of {total} {what}s marked"
              + (f"; {len(excused)} inside your bad stretches (fine)" if excused else "")]
     if missed:
@@ -627,12 +693,21 @@ def score_point_channel(ch, truth, final_indices, criteria, bad_stretches=()):
     return ok, lines
 
 
+def _spans_text(mask, limit=4):
+    """'69.5-77.5 s, 160.8-166.0 s' for the stretches where mask is True (at most limit, then 'and N more')."""
+    edges = np.flatnonzero(np.diff(np.r_[0, mask.astype(np.int8), 0]))
+    runs = list(zip(edges[::2], edges[1::2]))
+    parts = [f"{a / FS:.1f}-{b / FS:.1f} s" for a, b in runs[:limit]]
+    if len(runs) > limit:
+        parts.append(f"and {len(runs) - limit} more")
+    return ", ".join(parts)
+
+
 def score_segment_channel(ch, truth, bad_segments, criteria, n_samples):
     marked = np.zeros(n_samples, dtype=bool)
     for start, end in bad_segments:
         marked[max(0, int(start)):min(n_samples, int(end))] = True
     lines, ok = [], True
-    leeway = int(criteria["artifact_leeway_sec"] * FS)
     allowed = np.zeros(n_samples, dtype=bool)
     for art in truth["artifacts"]:
         coverage = float(marked[art["start"]:art["end"]].mean()) if art["end"] > art["start"] else 1.0
@@ -640,7 +715,8 @@ def score_segment_channel(ch, truth, bad_segments, criteria, n_samples):
         ok &= hit
         lines.append(f"  {'OK ' if hit else 'FIX'}  {art['type']} at {art['start'] / FS:.1f}-{art['end'] / FS:.1f} s: "
                      f"{coverage:.0%} marked bad")
-        allowed[max(0, art["start"] - leeway):min(n_samples, art["end"] + leeway)] = True
+        pad = int(art.get("leeway_sec", criteria["artifact_leeway_sec"]) * FS)  # the PPG dropout: 2 s
+        allowed[max(0, art["start"] - pad):min(n_samples, art["end"] + pad)] = True
     for trap in truth.get("traps", []):
         coverage = float(marked[trap["start"]:trap["end"]].mean())
         clean = coverage <= criteria["trap_max_coverage"]
@@ -654,11 +730,14 @@ def score_segment_channel(ch, truth, bad_segments, criteria, n_samples):
         ok &= removed
         lines.append(f"  {'OK ' if removed else 'FIX'}  the machine's mark on {false_flag['type']} at "
                      f"{false_flag['start'] / FS:.1f}-{false_flag['end'] / FS:.1f} s: {coverage:.0%} still marked")
+    # A total, not a time in the run: HLU (2026-10-05) read "13.7 s marked bad" as a place, so the
+    # stretches are listed too.
     outside = float((marked & ~allowed).sum()) / FS
     within = outside <= criteria["max_seconds_marked_outside"]
     ok &= within
-    lines.append(f"  {'OK ' if within else 'FIX'}  {outside:.1f} s marked bad where the signal is fine "
-                 f"(limit {criteria['max_seconds_marked_outside']:.1f} s)")
+    lines.append(f"  {'OK ' if within else 'FIX'}  {outside:.1f} s in all marked bad where the signal is fine "
+                 f"(limit {criteria['max_seconds_marked_outside']:.1f} s)"
+                 + (f", at {_spans_text(marked & ~allowed)}" if outside > 0 else ""))
     return ok, lines
 
 
@@ -697,7 +776,8 @@ def score_run(key, submission, run, channels=None):
             continue
         if truth["mode"] == "point":
             bad = (reviewed.get(f"bad_{ch}") or {}).get("bad_segments", [])
-            ok, ch_lines = score_point_channel(ch, truth, reviewed[ch].get("indices", []), criteria, bad)
+            ok, ch_lines = score_point_channel(ch, truth, reviewed[ch].get("indices", []), criteria, bad,
+                                               run_key.get("n_samples"))
         else:
             ok, ch_lines = score_segment_channel(ch, truth, reviewed[ch].get("bad_segments", []), criteria,
                                                  run_key["n_samples"])

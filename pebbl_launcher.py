@@ -17,7 +17,13 @@ annotate_env Python. In order:
    anyway.
 3. On a Mac, keep "Start PEBBL.command" executable (a pull can rewrite it
    without the executable bit).
-4. Run physio_review.py with no arguments, which opens the form.
+4. Run physio_review.py with no arguments, which opens the form, once per
+   session (HLU, 2026-10-05). Each session runs in its own process, so it
+   finishes completely (copy back, cleanup, session log) first. When a
+   session ends, normally or stopped with its own message, the form opens
+   again. The form's Cancel closes PEBBL. So do Ctrl-C and any other
+   failure, such as an error before the form could open, so a broken
+   update can't loop.
 
 Only the standard library is used, so an update that changes the packages
 can't break this script.
@@ -35,6 +41,11 @@ ENV = os.path.join(HERE, "annotate_env")
 REQUIREMENTS = os.path.join(HERE, "requirements.txt")
 INSTALLED = os.path.join(ENV, "requirements.installed.txt")
 MAC_LAUNCHER = os.path.join(HERE, "Start PEBBL.command")
+PHYSIO_REVIEW = os.path.join(HERE, "physio_review.py")
+# Exit codes from physio_review.py (copies: this script imports only the
+# standard library; test_pebbl_launcher.py checks they match).
+FORM_CANCELED_EXIT = 3
+SESSION_STOPPED_EXIT = 4
 
 
 def update_code():
@@ -76,6 +87,22 @@ def keep_mac_launcher_executable():
         os.chmod(MAC_LAUNCHER, mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
 
+def run_sessions():
+    """Open the form, run the session, and open the form again until it's canceled. Returns the exit code."""
+    env = dict(os.environ, PEBBL_LAUNCHER="1")
+    while True:
+        code = subprocess.call([sys.executable, PHYSIO_REVIEW], cwd=HERE, env=env)
+        if code == 0:
+            print("\nOpening the form for your next session. Click Cancel there to close PEBBL.\n")
+        elif code == SESSION_STOPPED_EXIT:
+            print("\nThat session stopped early (see the message above). Opening the form again; click Cancel "
+                  "there to close PEBBL.\n")
+        elif code == FORM_CANCELED_EXIT:
+            return 0
+        else:
+            return code
+
+
 def main():
     status = update_code()
     if status:
@@ -85,7 +112,7 @@ def main():
               "lab staff.")
         return 1
     keep_mac_launcher_executable()
-    return subprocess.call([sys.executable, os.path.join(HERE, "physio_review.py")], cwd=HERE)
+    return run_sessions()
 
 
 if __name__ == "__main__":

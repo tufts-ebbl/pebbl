@@ -13,14 +13,14 @@ import shutil
 import tempfile
 from unittest.mock import patch
 
-from physio_io import resolve_real_input_path, resolve_subject_run_paths
+from physio_io import find_run_path, resolve_real_input_path, resolve_subject_run_paths
 
 
-def make_fake_box_tree(root, subject="001", run="1"):
-    """Creates <root>/sub-{subject}/ses-run{run}/beh/sub-{subject}_ses-run{run}_task-sdi_physio.tsv.gz"""
+def make_fake_box_tree(root, subject="001", run="1", task="sdi"):
+    """Creates <root>/sub-{subject}/ses-run{run}/beh/sub-{subject}_ses-run{run}_task-{task}_physio.tsv.gz"""
     beh_dir = os.path.join(root, f"sub-{subject}", f"ses-run{run}", "beh")
     os.makedirs(beh_dir, exist_ok=True)
-    file_path = os.path.join(beh_dir, f"sub-{subject}_ses-run{run}_task-sdi_physio.tsv.gz")
+    file_path = os.path.join(beh_dir, f"sub-{subject}_ses-run{run}_task-{task}_physio.tsv.gz")
     with open(file_path, "wb") as f:
         f.write(b"")
     return file_path
@@ -106,6 +106,31 @@ def main():
             mock_input.assert_not_called()
         assert paths == {"1": subj2_run1, "2": subj2_run2}, paths
         print("   OK: explicit paths bypass box-path/subject entirely")
+
+        print("12. Any task label (HLU, 2026-10-05): another study's sub-XXX_ses-runY_task-<name> file is found; "
+              "our task-sdi file always wins when it exists; two candidates stop with a clear message...")
+        other = make_fake_box_tree(tmp_dir, subject="020", run="1", task="faces")
+        assert find_run_path(tmp_dir, "020", "1") == other
+        paths = resolve_subject_run_paths(None, None, tmp_dir, "020")
+        assert paths == {"1": other, "2": None}, paths
+        assert resolve_real_input_path(None, tmp_dir, "020", "1") == other
+        sdi = make_fake_box_tree(tmp_dir, subject="020", run="1", task="sdi")
+        assert find_run_path(tmp_dir, "020", "1") == sdi, "the task-sdi file is used whenever it exists"
+        os.remove(sdi)
+        second = make_fake_box_tree(tmp_dir, subject="020", run="1", task="rest")
+        try:
+            find_run_path(tmp_dir, "020", "1")
+            raise AssertionError("two candidates should stop")
+        except SystemExit as e:
+            assert "More than one recording" in str(e) and "task-faces" in str(e) and "task-rest" in str(e), e
+        os.remove(second)
+        not_physio = os.path.join(os.path.dirname(other), "sub-020_ses-run1_task-faces_annotations_hlu.json")
+        open(not_physio, "w").close()
+        assert find_run_path(tmp_dir, "020", "1") == other, "only *_physio.tsv.gz files count"
+        missing = find_run_path(tmp_dir, "021", "1")
+        assert missing.endswith("sub-021_ses-run1_task-sdi_physio.tsv.gz") and not os.path.exists(missing)
+        print("   OK: found task-faces; task-sdi preferred; two candidates stop; other files ignored; none -> "
+              "the usual missing-file message")
 
         print("\nALL PATH RESOLUTION TESTS PASSED.")
     finally:
