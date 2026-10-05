@@ -81,6 +81,10 @@ given `--apply`. It never copies this folder's internal notes, data or
 history. The user manual's source is `docs/PEBBL_User_Manual.html`;
 `docs/build_manual_pdf.py` rebuilds the PDF and the logo PNG with Edge or
 Chrome. The screenshots in `docs/img/` were captured from synthetic data.
+The export also writes `docs/index.html` (the manual as a standalone page,
+with a link to the PDF) and `docs/.nojekyll`. GitHub Pages serves the public
+repo's `docs` folder at https://tufts-ebbl.github.io/pebbl/, the manual's
+public address (GitHub's own file view doesn't preview this PDF).
 
 ## The unified script: `physio_review.py`
 
