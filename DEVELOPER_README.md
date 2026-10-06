@@ -89,6 +89,25 @@ given `--apply`. It never copies this folder's internal notes, data or
 history. The user manual's source is `docs/PEBBL_User_Manual.html`;
 `docs/build_manual_pdf.py` rebuilds the PDF and the logo PNG with Edge or
 Chrome. The screenshots in `docs/img/` were captured from synthetic data.
+
+**Lab computers: `setup_lab_computer.sh`** (HLU, 2026-10-06). One shared
+install per Windows computer, in `C:\Users\Public\Downloads\pebbl`. Run it in
+Git Bash as administrator (the one-liner is in the public README). It's safe to
+run again, and it:
+1. installs Python 3.11 for all users if `C:\Program Files\Python311` is missing
+   (python.org's 3.11.9, or `--python-installer \\server\share\...`). It first
+   checks the installer's Authenticode signature is the Python Software
+   Foundation's.
+2. sets `git config --system safe.directory`;
+3. clones or pulls the repo;
+4. runs `icacls ... //grant *S-1-5-32-545:(OI)(CI)M`;
+5. builds `annotate_env` from the ALL-USERS Python explicitly, replacing one
+   built from a per-user Python;
+6. puts `PEBBL.lnk` with `pebbl.ico` in `C:\Users\Public\Desktop`;
+7. checks all of it.
+
+`--dry-run` shows the steps; `--check` only checks, with no admin needed. Tested
+in test_pebbl_launcher item 6.
 The export also writes `docs/index.html` (the manual as a standalone page,
 with a link to the PDF) and `docs/.nojekyll`. GitHub Pages serves the public
 repo's `docs` folder at https://tufts-ebbl.github.io/pebbl/, the manual's

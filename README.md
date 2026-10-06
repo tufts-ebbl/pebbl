@@ -26,6 +26,21 @@ git clone https://github.com/tufts-ebbl/pebbl.git
 then run **Set up PEBBL.bat** (Windows) or `bash ~/pebbl/setup_pebbl.sh` (Mac) once, and start PEBBL with
 **Start PEBBL.bat** or **Start PEBBL.command**. PEBBL updates itself each time it starts.
 
+## Lab staff: setting up a shared lab computer
+
+One copy of PEBBL per Windows computer, for every user, with an icon on everyone's desktop. Open **Git Bash with
+"Run as administrator"** and paste:
+
+```
+curl -fLO https://raw.githubusercontent.com/tufts-ebbl/pebbl/main/setup_lab_computer.sh && bash setup_lab_computer.sh
+```
+
+It installs Python 3.11 for all users if needed (after checking the installer's signature), downloads PEBBL to
+`C:\Users\Public\Downloads\pebbl`, lets every user update it, builds its Python environment and adds the desktop
+icon. It ends with a checklist. It's safe to run again. Add `--python-installer '\\server\share\python-3.11.x-amd64.exe'`
+to install Python from your own copy (use the full network path, not a mapped drive letter), `--dry-run` to see what
+it would do, or `--check` to check a computer without changing it.
+
 ## For developers
 
 `DEVELOPER_README.md` documents the tool in detail: the command-line options, the review steps, the saved file

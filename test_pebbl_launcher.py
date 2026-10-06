@@ -117,6 +117,33 @@ def main():
         assert consts["SESSION_STOPPED_EXIT"] == pl.SESSION_STOPPED_EXIT
         assert consts["LAUNCHER_ENV"] == "PEBBL_LAUNCHER"
         print("   OK: loops on 0 and 4; Cancel ends with 0; 1 and 130 end with their code; codes match physio_review")
+        print("6. setup_lab_computer.sh (HLU, 2026-10-06; Windows with Git Bash only): valid bash; --check only "
+              "reports; a missing --python-installer and an unknown option stop with a message...")
+        git = shutil.which("git")  # ...\Git\cmd\git.exe, or ...\Git\mingw64\bin\git.exe from inside Git Bash
+        candidates = [os.path.join(git, *[".."] * up, "bin", "bash.exe") for up in (2, 3)] if git else []
+        bash = next((os.path.normpath(c) for c in candidates if os.path.exists(c)), None)
+        script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "setup_lab_computer.sh")
+        if os.name != "nt" or not (bash and os.path.exists(bash)):
+            print("   skipped: needs Git Bash on Windows")
+        else:
+            def sh(*args, **env):
+                result = subprocess.run([bash, script, *args], capture_output=True, text=True, timeout=300,
+                                        env=dict(os.environ, **env))
+                return result.returncode, result.stdout + result.stderr
+            assert subprocess.run([bash, "-n", script]).returncode == 0, "syntax"
+            empty = os.path.join(tmp, "not_set_up")
+            os.makedirs(empty)
+            fake_python = os.path.join(tmp, "no_python", "python.exe")
+            code, out = sh("--check", PEBBL_DIR=empty, PEBBL_PYTHON=fake_python,
+                           PEBBL_SHORTCUT=os.path.join(tmp, "PEBBL.lnk"))
+            assert code == 1 and "Checking only" in out and out.count("PROBLEM") == 8, out
+            assert "would run" not in out and "== 1." not in out, "--check changes nothing and skips the setup steps"
+            code, out = sh("--dry-run", "--python-installer", os.path.join(tmp, "missing", "python.exe"),
+                           PEBBL_DIR=empty, PEBBL_PYTHON=fake_python)
+            assert code == 1 and "Can't find the Python installer" in out and "full network path" in out, out
+            code, out = sh("--frobnicate", PEBBL_DIR=empty)
+            assert code == 1 and "Unknown option: --frobnicate" in out, out
+            print("   OK: syntax; --check lists 8 problems on a bare folder and runs nothing; clear stops")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     print("\nALL PEBBL LAUNCHER TESTS PASSED.")
