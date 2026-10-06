@@ -126,9 +126,9 @@ def main():
         if os.name != "nt" or not (bash and os.path.exists(bash)):
             print("   skipped: needs Git Bash on Windows")
         else:
-            def sh(*args, **env):
+            def sh(*args, answer="", **env):
                 result = subprocess.run([bash, script, *args], capture_output=True, text=True, timeout=300,
-                                        env=dict(os.environ, **env))
+                                        env=dict(os.environ, **env), input=answer)
                 return result.returncode, result.stdout + result.stderr
             assert subprocess.run([bash, "-n", script]).returncode == 0, "syntax"
             empty = os.path.join(tmp, "not_set_up")
@@ -143,7 +143,21 @@ def main():
             assert code == 1 and "Can't find the Python installer" in out and "full network path" in out, out
             code, out = sh("--frobnicate", PEBBL_DIR=empty)
             assert code == 1 and "Unknown option: --frobnicate" in out, out
-            print("   OK: syntax; --check lists 8 problems on a bare folder and runs nothing; clear stops")
+            # HLU's lab computer (2026-10-06): this account's own Python 3.11 blocks the all-users install.
+            # The script explains and asks; no (or Enter) stops, yes uninstalls that copy and carries on.
+            mine = dict(PEBBL_DIR=empty, PEBBL_PYTHON=fake_python, PEBBL_SHORTCUT=os.path.join(tmp, "PEBBL.lnk"),
+                        PEBBL_TEST_PER_USER="C:\\Users\\ra\\AppData\\Local\\Programs\\Python\\Python311\\",
+                        PEBBL_TEST_PER_USER_NAMES="Python 3.11.4 (64-bit)")
+            code, out = sh("--dry-run", answer="\n", **mine)
+            assert code == 1 and "installed just for your account: Python 3.11.4 (64-bit)" in out, out
+            assert "Uninstall it now? [y/N]" in out and "Left it in place" in out and "would run" not in out, out
+            code, out = sh("--dry-run", answer="y\n", **mine)
+            assert "would run: run_ps per_user_python_uninstall.ps1 3.11 -Run" in out, out
+            assert "Downloading the Python" in out and "== 2." in out, "goes on to install after the uninstall"
+            code, out = sh("--dry-run", PEBBL_DIR=empty, PEBBL_PYTHON=fake_python, PEBBL_TEST_PER_USER="")
+            assert "Uninstall it now" not in out and "Downloading the Python" in out, "no own copy: no question"
+            print("   OK: syntax; --check lists 8 problems on a bare folder and runs nothing; clear stops; this "
+                  "account's own 3.11 is explained and only uninstalled on yes")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     print("\nALL PEBBL LAUNCHER TESTS PASSED.")

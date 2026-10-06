@@ -17,7 +17,10 @@
 # What it does:
 #   1. Installs Python 3.11 for all users (C:\Program Files\Python311) if it
 #      isn't there, after checking that the installer is signed by the Python
-#      Software Foundation.
+#      Software Foundation. If Python 3.11 is installed just for the account
+#      running this (which blocks an all-users install), it explains why and
+#      ASKS before uninstalling that copy. It never touches any other Python
+#      (other versions, other accounts' copies, Anaconda).
 #   2. Lets every account's Git update the PEBBL folder (Git's safe.directory).
 #   3. Downloads PEBBL into C:\Users\Public\Downloads\pebbl, or updates it.
 #   4. Gives every user write access to that folder, so PEBBL can update itself
@@ -71,10 +74,31 @@ $s = Get-AuthenticodeSignature -LiteralPath $Path
 "$($s.Status)|$($s.SignerCertificate.Subject)"
 PS
 cat > "$WORK/install_python.ps1" <<'PS'
-param([string]$Exe)
+param([string]$Exe, [string]$Log)
 $p = Start-Process -FilePath $Exe -Wait -PassThru -ArgumentList '/quiet', 'InstallAllUsers=1', 'PrependPath=1',
-    'Include_launcher=1', 'InstallLauncherAllUsers=1', 'Include_test=0'
+    'Include_launcher=1', 'InstallLauncherAllUsers=1', 'Include_test=0', ('/log "' + $Log + '"')
 exit $p.ExitCode
+PS
+cat > "$WORK/per_user_python.ps1" <<'PS'
+param([string]$Version)
+$k = "HKCU:\Software\Python\PythonCore\$Version\InstallPath"
+if (Test-Path -LiteralPath $k) { (Get-ItemProperty -LiteralPath $k).'(default)' }
+PS
+cat > "$WORK/per_user_python_uninstall.ps1" <<'PS'
+# This account's own Python <Version> installs: the visible "Python 3.11.x (64-bit)" bundle entries in HKCU
+# (they have a BundleVersion and a quiet uninstall command). Lists their names; with -Run, uninstalls them.
+param([string]$Version, [switch]$Run)
+$found = @(Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' -ErrorAction SilentlyContinue |
+    ForEach-Object { Get-ItemProperty -LiteralPath $_.PSPath } |
+    Where-Object { $_.BundleVersion -and $_.QuietUninstallString -and $_.DisplayName -like "Python $Version.*" })
+if (-not $Run) { $found | ForEach-Object { $_.DisplayName }; exit 0 }
+$code = 0
+foreach ($p in $found) {
+    $proc = Start-Process -FilePath 'cmd.exe' -ArgumentList ('/c "' + $p.QuietUninstallString + '"') -Wait -PassThru -WindowStyle Hidden
+    "$($p.DisplayName): uninstaller exit code $($proc.ExitCode)"
+    if ($proc.ExitCode -ne 0 -and $proc.ExitCode -ne 3010) { $code = $proc.ExitCode }
+}
+exit $code
 PS
 cat > "$WORK/shortcut.ps1" <<'PS'
 param([string]$Lnk, [string]$Target, [string]$Dir, [string]$Icon)
@@ -111,6 +135,43 @@ else
   if [ -n "$PY_INSTALLER" ]; then
     src="$(cygpath -u "$PY_INSTALLER")"
     [ -f "$src" ] || fail "Can't find the Python installer at $PY_INSTALLER. Use its full network path (\\\\server\\share\\...), not a drive letter: an administrator window can't see drives mapped in your normal session."
+  fi
+  # A Python 3.11 installed just for this account blocks the all-users install: the installer tries to
+  # change that copy instead, and fails (HLU's lab computer, 2026-10-06: code 67, log 0x643).
+  if [ -n "${PEBBL_TEST_PER_USER+set}" ]; then
+    per_user="$PEBBL_TEST_PER_USER"  # tests only
+  else
+    per_user="$(run_ps per_user_python.ps1 "${PYTHON_VERSION%.*}" | tr -d '\r')"
+  fi
+  if [ -n "$per_user" ]; then
+    ver="${PYTHON_VERSION%.*}"
+    by_hand="Settings > Apps > Installed apps > 'Python $ver.x (64-bit)' > Uninstall"
+    if [ -n "${PEBBL_TEST_PER_USER_NAMES+set}" ]; then
+      names="$PEBBL_TEST_PER_USER_NAMES"  # tests only
+    else
+      names="$(run_ps per_user_python_uninstall.ps1 "$ver" | tr -d '\r')"
+    fi
+    [ -n "$names" ] || fail "Python $ver is installed just for your account, in ${per_user}, and it blocks the all-users install. Uninstall it by hand ($by_hand), then run this script again."
+    note "Python $ver is installed just for your account: $(echo "$names" | paste -sd ',' -), in ${per_user}."
+    note "The all-users installer can't install next to it (it tries to change that copy instead, and fails),"
+    note "so it has to go first. PEBBL doesn't use it, but anything installed into that copy goes with it."
+    note "Nothing else is touched: other Python versions, other accounts' copies and Anaconda stay."
+    printf '   Uninstall it now? [y/N] '
+    read -r answer || answer=""
+    answer="${answer//$'\r'/}"; answer="${answer// /}"  # tolerate a Windows line ending or stray spaces
+    case "$answer" in
+      y|Y|yes|Yes|YES) ;;
+      *) fail "Left it in place. To go on, uninstall it ($by_hand), then run this script again." ;;
+    esac
+    run run_ps per_user_python_uninstall.ps1 "$ver" -Run \
+      || fail "The uninstall didn't finish (exit codes above). Uninstall it by hand ($by_hand), then run this script again."
+    if [ "$DRY_RUN" = 0 ]; then
+      [ -z "$(run_ps per_user_python.ps1 "$ver" | tr -d '\r')" ] \
+        || fail "It still looks installed. Uninstall it by hand ($by_hand), then run this script again."
+      note "Uninstalled."
+    fi
+  fi
+  if [ -n "$PY_INSTALLER" ]; then
     note "Copying the Python installer from $PY_INSTALLER..."
     run cp "$src" "$installer" || fail "Couldn't copy $PY_INSTALLER"
   else
@@ -125,10 +186,22 @@ else
     esac
   fi
   note "Installing for all users (a few minutes; no windows appear)..."
+  py_log="/tmp/pebbl_python_install.log"
   if [ "$DRY_RUN" = 0 ]; then
-    run_ps install_python.ps1 "$(winpath "$installer")"
+    run_ps install_python.ps1 "$(winpath "$installer")" "$(winpath "$py_log")"
     code=$?
-    [ "$code" = 0 ] || [ "$code" = 3010 ] || fail "The Python installer stopped with code $code."
+    if [ "$code" != 0 ] && [ "$code" != 3010 ]; then
+      case "$code" in
+        67) meaning="a network location it needed couldn't be found" ;;
+        1602) meaning="the installation was canceled" ;;
+        1603) meaning="a fatal error during installation" ;;
+        1618) meaning="another installation is already running (often Windows Update); wait for it, then run this again" ;;
+        *) meaning="see its log" ;;
+      esac
+      printf '\n   The installer'"'"'s log is %s. Its last lines:\n' "$(winpath "$py_log")"
+      tail -n 15 "$py_log" 2> /dev/null | tr -d '\r' | sed 's/^/     /'
+      fail "The Python installer stopped with code $code ($meaning). If Python ${PYTHON_VERSION%.*} is installed for any single account on this computer, uninstall that copy first."
+    fi
   else
     run "$installer" /quiet InstallAllUsers=1 PrependPath=1 Include_launcher=1 InstallLauncherAllUsers=1 Include_test=0
   fi

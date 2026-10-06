@@ -97,7 +97,15 @@ run again, and it:
 1. installs Python 3.11 for all users if `C:\Program Files\Python311` is missing
    (python.org's 3.11.9, or `--python-installer \\server\share\...`). It first
    checks the installer's Authenticode signature is the Python Software
-   Foundation's.
+   Foundation's. If Python 3.11 is installed just for the account running the
+   script (`HKCU\Software\Python\PythonCore\3.11`), the all-users installer
+   fails: HLU's lab computer gave code 67 and a log ending 0x643. So the
+   script explains this and asks `[y/N]`. On yes, it runs that bundle's own
+   `QuietUninstallString` (only HKCU "Python 3.11.x" entries with a
+   BundleVersion) and checks it's gone. Other versions, other accounts and
+   Anaconda are never touched. If an install still fails, it prints the
+   meaning of the code and the end of its `/log`
+   (`%TEMP%\pebbl_python_install.log`).
 2. sets `git config --system safe.directory`;
 3. clones or pulls the repo;
 4. runs `icacls ... //grant *S-1-5-32-545:(OI)(CI)M`;

@@ -35,7 +35,9 @@ One copy of PEBBL per Windows computer, for every user, with an icon on everyone
 curl -fLO https://raw.githubusercontent.com/tufts-ebbl/pebbl/main/setup_lab_computer.sh && bash setup_lab_computer.sh
 ```
 
-It installs Python 3.11 for all users if needed (after checking the installer's signature), downloads PEBBL to
+It installs Python 3.11 for all users if needed (after checking the installer's signature; if Python 3.11 is
+installed just for your own account, which blocks that, it explains and asks before uninstalling that copy, and it
+never touches any other Python), downloads PEBBL to
 `C:\Users\Public\Downloads\pebbl`, lets every user update it, builds its Python environment and adds the desktop
 icon. It ends with a checklist. It's safe to run again. Add `--python-installer '\\server\share\python-3.11.x-amd64.exe'`
 to install Python from your own copy (use the full network path, not a mapped drive letter), `--dry-run` to see what
