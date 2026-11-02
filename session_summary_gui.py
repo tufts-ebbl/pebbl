@@ -281,6 +281,29 @@ def show_session_summary(heading, change_lines, warning_lines, n_changes, finish
     return dialog.decision
 
 
+def confirm_ecg_restart(saved_flipped):
+    """
+    Asks whether to set aside an ECG review saved with the other "Flip the
+    ECG" setting and start the ECG over (HLU, 2026-11-01: RAs may do this
+    themselves after confirming). True to start over; Cancel (the default) or
+    closing the window is False. Tests replace it, like show_session_summary.
+    """
+    app = QApplication.instance() or QApplication([])  # noqa: F841
+    was, now = ("with", "without") if saved_flipped else ("without", "with")
+    box = QMessageBox(QMessageBox.Icon.Question, "Start the ECG over?",
+                      f"Your saved ECG review was made {was} 'Flip the ECG (recorded upside down)', and this session "
+                      f"is {now} it.\n\n"
+                      f"If the box is right now, PEBBL will set that ECG review aside and start the ECG over: the ECG "
+                      f"peaks and ECG bad stretches start fresh, and the earlier ones are kept in your file when you "
+                      f"save. Your other channels are kept as they are.\n\n"
+                      f"If the box is wrong now, choose Cancel and set it back.")
+    start = box.addButton("Start the ECG over", QMessageBox.ButtonRole.AcceptRole)
+    cancel = box.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
+    box.setDefaultButton(cancel)
+    box.exec()
+    return box.clickedButton() is start
+
+
 def headless_decision(action=SAVE, comment="", finished=False):
     """
     Returns a stand-in for show_session_summary() that answers immediately,

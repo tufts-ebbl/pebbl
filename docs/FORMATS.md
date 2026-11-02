@@ -323,9 +323,15 @@ Optional settings (the default, PEBBL's built-in value, in brackets):
 **Flipping the ECG.** With `--ecg-inverted`, PEBBL negates the ECG in memory
 for Steps 1-3, so its R peaks point up; the file, and so its signal hash, is
 unchanged, and saved peaks are file samples as always. The Step 1 template
-and the saved `ecg` entry record `"inverted": true`. A template or saved
-review made with the opposite setting stops the session with a message, and
-Step 3 warns when a reviewer's setting differs from the reconciler's.
+and the saved `ecg` entry record `"inverted": true`. A template made with
+the opposite setting stops Step 2, with a message to rebuild it in Step 1.
+A saved ECG review made with the opposite setting makes an ECG session ask
+whether to start the ECG over (HLU, 2026-11-01): if the RA confirms, `ecg`
+and `bad_ecg` start fresh, the earlier entries are kept as
+`ecg_points_legacy` and `bad_ecg_segments_legacy` at save, and the other
+channels are untouched; Cancel stops with nothing changed. Sessions on other
+channels aren't affected. Step 3 warns when a reviewer's setting differs
+from the reconciler's.
 
 - PEBBL refuses a profile with an unknown setting, a wrong value, or text it
   can't read, with a plain message: a misspelled setting is never silently

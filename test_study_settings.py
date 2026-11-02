@@ -20,7 +20,11 @@ that sets only the task label (DEFAULTS_PROFILE):
   7. ecg_seed_snap_ms: Step 1's seed window (15 ms built in, since 2026-10-31).
   8. ECG flip (--ecg-inverted): on an ECG recorded upside down, a drawn R
      peak lands on the true R only when flipped; the saved review records
-     it; reopening it unflipped stops; the defaults refuse it.
+     it; the defaults refuse it. Reopening it with the other setting asks
+     whether to start the ECG over: Cancel stops with nothing changed; yes
+     keeps the earlier ECG entries under legacy keys and the other channels
+     as they were, in both directions. Another channel's session isn't
+     stopped. Step 1 and an old template point the RA the right way.
   9. The form follows the data folder's profile; a ticked flip reaches the
      command line.
  10. check_reprocess_alignment.py uses the profile's task label.
@@ -44,6 +48,7 @@ from unittest.mock import patch
 import mne
 import numpy as np
 
+import annotation_io
 import check_reprocess_alignment
 import physio_review
 import processing_log
@@ -125,8 +130,12 @@ def make_recording(folder, subject, upside_down=False, seconds=30):
     return tsv, df
 
 
-def run_session(argv, snapshot_dir, plot=None):
-    """A non-interactive session; returns (exit code, console text, the plot call's kwargs)."""
+def run_session(argv, snapshot_dir, plot=None, restart_ecg=False):
+    """
+    A non-interactive session; returns (exit code, console text, the plot
+    call's kwargs). restart_ecg answers "Start the ECG over?" (asked when the
+    saved ECG review's flip differs); seen["asked"] records whether it was.
+    """
     seen = {}
 
     def record_plot(self, *args, **kwargs):
@@ -134,11 +143,16 @@ def run_session(argv, snapshot_dir, plot=None):
         if plot:
             plot(self)
 
+    def answer_restart(saved_flipped):
+        seen["asked"] = saved_flipped
+        return restart_ecg
+
     out = io.StringIO()
     code = 0
     with patch.object(sys, "argv", ["physio_review.py", "--no-local-copy", "--initials", "zz"] + argv), \
          patch.object(mne.io.RawArray, "plot", record_plot), \
          patch.object(processing_log, "LOCAL_SNAPSHOT_DIR", snapshot_dir), \
+         patch.object(session_summary_gui, "confirm_ecg_restart", answer_restart), \
          patch.object(session_summary_gui, "show_session_summary", session_summary_gui.headless_decision()), \
          patch("builtins.input", side_effect=AssertionError("no terminal prompt expected")), \
          QUIET(out), contextlib.redirect_stderr(out):
@@ -288,8 +302,13 @@ def main():
         code, text, _ = run_session(["--box-path", flipped_folder] + base + ["--ecg-inverted"], snapshot, plot=draw_r)
         assert code in (0, None) and "shown flipped" in text, text[-1500:]
         assert nearest(flipped_tsv) == true_r and saved(flipped_tsv)["channels"]["ecg"]["inverted"] is True
-        code, text, _ = run_session(["--box-path", flipped_folder] + base, snapshot)
+        code, text, seen = run_session(["--box-path", flipped_folder] + base, snapshot)
+        assert seen.get("asked") is True, "the RA is asked whether to start the ECG over"
         assert code not in (0, None) and "made with 'Flip the ECG" in text, text[-1500:]
+        assert "You chose not to start the ECG over" in text and saved(flipped_tsv)["channels"]["ecg"]["inverted"]
+        cor = ["--subject", "041", "--run", "1", "--channels", "emg_cor"]  # no flip: the form sends it only with ECG
+        code, text, seen = run_session(["--box-path", flipped_folder] + cor, snapshot)
+        assert code in (0, None) and "asked" not in seen, f"another channel's session isn't stopped: {text[-1500:]}"
 
         unflipped_folder = os.path.join(tmp, "unflipped")
         os.makedirs(unflipped_folder)
@@ -298,6 +317,40 @@ def main():
         code, text, _ = run_session(["--box-path", unflipped_folder] + base, snapshot, plot=draw_r)
         assert code in (0, None), text[-1500:]
         assert nearest(unflipped_tsv) != true_r and "inverted" not in saved(unflipped_tsv)["channels"]["ecg"]
+
+        # The flip forgotten: Step 1 says what's coming; Step 2 starts the ECG over once the RA confirms.
+        code, text, _ = run_session(["--box-path", unflipped_folder] + cor, snapshot)
+        assert code in (0, None), text[-1500:]
+        before = saved(unflipped_tsv)["channels"]
+        study_profile.set_ecg_flipped(True)
+        out = io.StringIO()
+        with QUIET(out):
+            qrs_template.save_qrs_template_outputs(os.path.dirname(unflipped_tsv),
+                                                   os.path.basename(unflipped_tsv)[:-len("_physio.tsv.gz")], "zz",
+                                                   [beat], upright.iloc[:1])
+        reset()
+        assert "will offer to set that review aside" in out.getvalue(), out.getvalue()
+        code, text, seen = run_session(["--box-path", unflipped_folder] + base + ["--ecg-inverted"], snapshot,
+                                       plot=draw_r, restart_ecg=True)
+        assert code in (0, None) and seen.get("asked") is False and "the ECG starts over" in text, text[-1500:]
+        after = saved(unflipped_tsv)["channels"]
+        assert after["ecg"]["inverted"] is True and nearest(unflipped_tsv) == true_r
+        assert after["ecg_points_legacy"] == before["ecg"] and after["bad_ecg_segments_legacy"] == before["bad_ecg"]
+        assert after["emg_cor"] == before["emg_cor"], "other channels are kept as they were"
+        # ...and back the other way (an rS ECG flipped by mistake).
+        code, text, seen = run_session(["--box-path", flipped_folder] + base, snapshot, restart_ecg=True)
+        assert code in (0, None) and seen.get("asked") is True, text[-1500:]
+        assert "inverted" not in saved(flipped_tsv)["channels"]["ecg"]
+        assert saved(flipped_tsv)["channels"]["ecg_points_legacy"]["inverted"] is True
+        # A template made with the other setting points to Step 1.
+        template = os.path.join(tmp, "template.json")
+        with open(template, "w") as f:
+            json.dump({"ecg": {"corrected_peaks": [beat], "initials": ["zz"], "inverted": True}}, f)
+        try:
+            annotation_io.resolve_ecg_peaks(upright, "template", template)
+            raise AssertionError("expected SystemExit")
+        except SystemExit as e:
+            assert "rebuild your template in Step 1 first" in str(e), str(e)
         code, text, _ = run_session(["--box-path", plain] + base + ["--ecg-inverted"], snapshot)
         assert code not in (0, None) and "doesn't use 'Flip the ECG'" in text, text[-1500:]
         print(f"   OK: flipped, the drawn mark is on the true R ({true_r}); unflipped, it isn't")
