@@ -1376,7 +1376,11 @@ sidecar's `MachineQC`). Version 2 (2026-09-26) adds, per channel:
 - `<channel>_points_legacy` (or `_segments_legacy`, or `_unknown_legacy` for
   an unrecognized mode; `..._legacy_2`, `_3` and so on if the name is taken):
   an earlier review made in an older mode (e.g. RSP breath peaks), kept
-  rather than lost.
+  rather than lost. Also an ECG review the RA set aside to start the ECG
+  over with the other "Flip the ECG" setting (`ecg_points_legacy`,
+  `bad_ecg_segments_legacy`; HLU, 2026-11-01): Step 2 asks
+  (`session_summary_gui.confirm_ecg_restart`) when an ECG session's flip
+  differs from the saved review's; Cancel stops with nothing changed.
 - `bad_ecg` (with `ecg`, since 2026-09-27): the ECG's bad stretches, as a
   segment entry. It starts blank (the original study's pipeline has no
   machine check for ECG), or, with the profile setting

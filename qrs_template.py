@@ -313,10 +313,14 @@ def save_qrs_template_outputs(output_dir, file_stem, initials, final_peaks, qrs_
     if os.path.exists(annotations_path):
         try:
             with open(annotations_path, encoding="utf-8-sig") as f:
-                has_ecg = "ecg" in (json.load(f).get("channels") or {})
+                saved_ecg = (json.load(f).get("channels") or {}).get("ecg")
         except (OSError, UnicodeDecodeError, ValueError, AttributeError):
-            has_ecg = False  # an unreadable review file is reported plainly by Step 2
-        if has_ecg:
+            saved_ecg = None  # an unreadable review file is reported plainly by Step 2
+        if isinstance(saved_ecg, dict) and bool(saved_ecg.get("inverted")) != study_profile.ecg_flipped():
+            print(f"NOTE: your saved ECG review for {file_stem} was made with 'Flip the ECG (recorded upside down)' "
+                  f"set the other way. When you open Step 2 with the box as it is now, PEBBL will offer to set that "
+                  f"review aside and start the ECG over; your other channels are kept.")
+        elif saved_ecg is not None:
             print(f"NOTE: you already have a saved ECG review for {file_stem}. It is NOT changed by this "
                   f"new template -- your saved peaks are what Step 2 reopens.")
     payload = {"ecg": {"corrected_peaks": [int(p) for p in final_peaks], "initials": [initials]}}

@@ -344,18 +344,20 @@ def find_template_json(out_dir, file_stem, explicit_path=None, initials=None, re
     return os.path.join(out_dir, f"{file_stem}_ecg_corrected_qrs_none-found.json")
 
 
-def check_flip_matches(saved_flipped, what):
+def check_flip_matches(saved_flipped, what, advice=None):
     """
     Stops when something saved earlier (a template, a review) was made with
     the ECG flipped and this session isn't, or the other way round: its R
     peaks would sit on the other side of the wave. Never fires with the
-    built-in settings, which have no flip.
+    built-in settings, which have no flip. `advice` replaces the default
+    "set the box to match" sentence; {box} in it becomes "Tick" or "Untick".
     """
     if saved_flipped == study_profile.ecg_flipped():
         return
     was, box = ("made with", "Tick") if saved_flipped else ("made without", "Untick")
+    advice = (advice or "{box} that box to match, then start again.").format(box=box)
     raise SystemExit(f"{what} {was} 'Flip the ECG (recorded upside down)', but this session is not the same. "
-                     f"{box} that box to match, then start again. Nothing has been changed.")
+                     f"{advice} Nothing has been changed.")
 
 
 def resolve_ecg_peaks(df, ecg_source, template_json_path):
@@ -384,7 +386,9 @@ def resolve_ecg_peaks(df, ecg_source, template_json_path):
     if ecg_source in ("template", "auto") and template_exists:
         payload = read_saved_json(template_json_path, what="ECG template file")
         check_flip_matches(bool((payload.get("ecg") or {}).get("inverted")) if isinstance(payload.get("ecg"), dict)
-                           else False, "Your ECG template was")
+                           else False, "Your ECG template was",
+                           advice="If the box is right now, rebuild your template in Step 1 first (the old one is "
+                                  "backed up); if it's wrong, {box} it to match.")
         corrected_peaks = (payload.get("ecg") or {}).get("corrected_peaks") if isinstance(payload.get("ecg"), dict) \
             else None
         if not isinstance(corrected_peaks, list) or not all(
@@ -1519,8 +1523,25 @@ def run_stage_b(df, sfreq, channel_configs, initials, out_dir, file_stem, source
         all_saved, saved_path = saved
         saved_channels, mode_changed = split_saved_by_mode(all_saved, full_channel_configs)
         check_saved_provenance(saved_channels, current_provenance, full_channel_configs)
-        if "ecg" in saved_channels:
-            check_flip_matches(bool(saved_channels["ecg"].get("inverted")), "Your saved ECG review was")
+        # A saved ECG review made with the other "Flip the ECG" setting: only
+        # an ECG session can be affected (the form sends the flip only with
+        # ECG), so other channels' sessions go ahead. The RA may set it aside
+        # and start the ECG over (HLU, 2026-11-01); the earlier ECG entries
+        # are kept under legacy keys at save, like a retired PPG review below.
+        saved_flipped = bool((saved_channels.get("ecg") or {}).get("inverted"))
+        if "ecg" in saved_channels and "ecg" in reviewed_keys and saved_flipped != study_profile.ecg_flipped():
+            if not session_summary_gui.confirm_ecg_restart(saved_flipped):
+                check_flip_matches(saved_flipped, "Your saved ECG review was",
+                                   advice="You chose not to start the ECG over. {box} that box to match, then start "
+                                          "again.")
+            for key in ("ecg", "bad_ecg"):
+                if key in saved_channels:
+                    saved_channels.pop(key)
+                    retired.append(key)
+            print(f"NOTE: your saved ECG review was made {'with' if saved_flipped else 'without'} 'Flip the ECG "
+                  f"(recorded upside down)'. As you confirmed, the ECG starts over with the box as it is now: ECG "
+                  f"peaks and ECG bad stretches start fresh, and the earlier ones are kept in the file under names "
+                  f"ending in '_legacy' when you save. Your other channels are unchanged.")
         # A saved PPG review with no provenance was made before 2026-09-26, on
         # the pre-fix PPG timing: never seed it onto this file's PPG. PPG starts
         # fresh and the old entry is kept under a legacy key (safety fix).
