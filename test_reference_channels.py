@@ -6,6 +6,10 @@ read-only track shown alongside whatever the RA chose to review via
 appearing in the exported output. Added after the user's request to
 "display the event markers below the chosen signal."
 
+Item 11 (2026-11-08): a mark tied to one row by Shift+click is still saved
+for its label's channel, whatever read-only or other row it's tied to (it
+used to be left out silently in Step 2), and the summary says so.
+
 Run with: annotate_env\\Scripts\\python.exe test_reference_channels.py
 """
 
@@ -22,9 +26,11 @@ from annotation_io import (
     export_annotations,
     run_stage_b,
     seed_annotations,
+    single_row_mark_lines,
 )
-from channel_config import CHANNELS, REFERENCE_CHANNELS
+from channel_config import CHANNELS, FULL_RANGE_CHANNELS, GUIDE_CHANNELS, REFERENCE_CHANNELS
 from physio_io import build_raw, compute_scalings, generate_synthetic_demo
+from reconcile import _agree_label, export_reconciled
 
 import session_summary_gui  # noqa: E402
 
@@ -143,6 +149,50 @@ def main():
         print("   OK: no 'events' kwarg passed when there's no event column to derive it from")
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    print("11. A mark tied to one row (Shift+click) is saved for its label's channel, whatever row it's "
+          "tied to, in Step 2 and Step 3, and the summary says so...")
+    tied_df = df_with_event.copy()
+    tied_df["emg_cor"] = np.random.default_rng(1).normal(size=len(tied_df))  # real-looking COR, so it has data
+    # Every kind of row at once: reviewed ECG with the PPG guide, reviewed COR with its full-range row,
+    # reviewed RSP with the EDA guide, and the event row.
+    rows = {"ecg": CHANNELS["ecg"], "ppg": GUIDE_CHANNELS["ppg"], "emg_cor": CHANNELS["emg_cor"],
+            "emg_cor_full": FULL_RANGE_CHANNELS["emg_cor_full"], "rsp": CHANNELS["rsp"],
+            "eda": GUIDE_CHANNELS["eda"], "event": REFERENCE_CHANNELS["event"]}
+    tied_raw = build_raw(tied_df, rows, sfreq)
+    assert tied_raw.ch_names == list(rows), tied_raw.ch_names
+    marks = [  # (onset s, duration s, label, the one row it's tied to, or None for an ordinary mark)
+        (0.5, 0.5, "bad_rsp", None),
+        (1.5, 0.5, "bad_rsp", "rsp"),            # its own row
+        (2.5, 0.5, "bad_rsp", "eda"),            # a guide row
+        (3.5, 0.5, "bad_rsp", "ecg"),            # another reviewed channel's row
+        (4.5, 0.5, "bad_emg_cor", "emg_cor_full"),  # the full-range row
+        (5.5, 0.5, "bad_emg_cor", "event"),      # the event row
+        (6.5, 0.3, "peak_ecg", "ppg"),           # a drawn peak tied to the PPG guide row
+    ]
+    for onset, duration, label, row in marks:
+        tied_raw.annotations.append(onset, duration, label, ch_names=[[row] if row else []])
+    out = export_annotations(tied_raw, tied_df, rows, sfreq)
+    want_rsp = [[500, 1000], [1500, 2000], [2500, 3000], [3500, 4000]]
+    assert sorted(out["rsp"]["bad_segments"]) == want_rsp, out["rsp"]["bad_segments"]
+    assert sorted(out["emg_cor"]["bad_segments"]) == [[4500, 5000], [5500, 6000]], out["emg_cor"]["bad_segments"]
+    assert len(out["ecg"]["indices"]) == 1 and 6500 <= out["ecg"]["indices"][0] <= 6900, out["ecg"]["indices"]
+    assert set(out) == {"ecg", "emg_cor", "rsp"}, "read-only rows never get an entry of their own"
+    lines = single_row_mark_lines(tied_raw)
+    assert lines == ["6 mark(s) tied to one row (Shift+click): saved as ordinary marks covering every row"], lines
+    plain_raw = build_raw(tied_df, rows, sfreq)
+    plain_raw.annotations.append(0.5, 0.5, "bad_rsp")
+    assert single_row_mark_lines(plain_raw) == [], "no line when no mark is tied to a row"
+    print(f"   OK (Step 2): all {len(marks)} marks saved (rsp {len(want_rsp)}, emg_cor 2, ecg 1); summary: {lines[0]}")
+
+    step3_raw = build_raw(tied_df, rows, sfreq)
+    step3_raw.annotations.append(2.5, 0.5, _agree_label("bad_rsp"), ch_names=[["eda"]])
+    step3_raw.annotations.append(4.5, 0.5, _agree_label("bad_emg_cor"), ch_names=[["emg_cor_full"]])
+    step3 = export_reconciled(step3_raw, tied_df, rows, sfreq, "aa", "bb")
+    assert step3["rsp"]["bad_segments"] == [[2500, 3000]], step3["rsp"]
+    assert step3["emg_cor"]["bad_segments"] == [[4500, 5000]], step3["emg_cor"]
+    assert len(single_row_mark_lines(step3_raw)) == 1
+    print("   OK (Step 3): tied marks saved the same way, and the same summary line")
 
     print("\nALL REFERENCE CHANNEL TESTS PASSED.")
 

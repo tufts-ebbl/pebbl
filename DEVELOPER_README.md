@@ -895,6 +895,19 @@ when you close the window, so you can go back and check. Don't rely on
 this catching everything, though -- following the "delete first, then
 add" rule above is the reliable way to avoid it in the first place.
 
+**Marks count by label, never by row (2026-11-08).** A mark covers every
+row, and on save it goes to the channel its label names (`bad_rsp` to RSP),
+whichever row it was drawn on: a guide row, the COR full-range row and the
+event row work as well as the reviewed row. Shift+click on a mark ties it
+to one row (MNE's single-channel annotation; it turns faint, with a dashed
+outline). PEBBL ignores that tie: Steps 1 and 3 always did, and Step 2 did
+not, so a mark tied to any row but its own channel's was silently left out
+of the save (`annotation_io.export_annotations`). Now the summary says
+"N mark(s) tied to one row (Shift+click): saved as ordinary marks covering
+every row" (`single_row_mark_lines`), and the saved file never records a
+tie, so a reopened review shows ordinary marks. `test_reference_channels.py`
+item 11 covers it.
+
 ### Interval regularity check
 
 When you close the window, ECG and PPG also get checked for unusually

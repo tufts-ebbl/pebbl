@@ -70,6 +70,7 @@ from annotation_io import (
     companion_provenance,
     drop_peaks_in_bad_stretches,
     full_range_banner_lines,
+    single_row_mark_lines,
     unknown_label_lines,
 )
 from channel_config import COMPANION_CHANNELS, is_present, with_companions
@@ -756,7 +757,7 @@ def run_stage_c(df, sfreq, channel_configs, out_dir, file_stem, source_file,
     origins = reviewer_origins(raw, channel_configs, sfreq, label_a, label_b)
 
     def step3_checks(r, outputs):
-        lines = unknown_label_lines(r, step3_labels) + unfinished
+        lines = unknown_label_lines(r, step3_labels) + single_row_mark_lines(r) + unfinished
         if outputs.get("ppg", {}).get("mode") == "point" and "ppg" in df.columns:
             invalid = (outputs.get("bad_ppg") or {}).get("bad_segments", ppg_invalid) if "bad_ppg" in outputs \
                 else ppg_invalid
