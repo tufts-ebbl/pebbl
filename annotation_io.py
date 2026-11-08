@@ -29,9 +29,9 @@ from provenance import channel_provenance, new_pipeline_ppg, provenance_mismatch
 from channel_config import (COMPANION_CHANNELS, FULL_RANGE_CHANNELS, FULL_RANGE_TEXT, GUIDE_CHANNELS,
                             GUIDE_CONTEXT_TEXT, GUIDE_COUNTER_LOSS_TEXT,
                             GUIDE_EXCEPTION_MAX_LISTED, GUIDE_EXCEPTION_REASONS, GUIDE_OPT_IN, GUIDE_PREMARK_REASONS,
-                            GUIDE_PREMARKED_TEXT, GUIDE_TEXTS, PPG_ADD_PEAK_TEXT, REFERENCE_CHANNELS, check_review_alone,
-                            empty_channels, is_present, keeps_machine_stretches, machine_qc_source, no_data_message,
-                            uses_machine_qc, with_companions)
+                            GUIDE_PREMARKED_TEXT, GUIDE_TEXTS, PPG_ADD_PEAK_TEXT, RAW_ROWS, REFERENCE_CHANNELS,
+                            check_review_alone, empty_channels, is_present, keeps_machine_stretches, machine_qc_source,
+                            no_data_message, raw_rows_for, uses_machine_qc, with_companions)
 from physio_io import (
     apply_unit_labels,
     build_raw,
@@ -39,6 +39,7 @@ from physio_io import (
     compute_channel_value_ranges,
     compute_scalings,
     format_channel_value_ranges,
+    hide_machine_reasons,
     MACHINE_QC_FLAGGED_WARNING_FRACTION,
     machine_qc_flagged_fraction,
     machine_qc_notes,
@@ -74,6 +75,12 @@ def combine_with_reference_channels(channel_configs, df, ppg_guide=False, sideca
     (FULL_RANGE_CHANNELS: corrugator EMG) gets it right underneath, when the
     channel has data that varies (not the synthetic demo's all-zero EMG
     placeholder).
+
+    A reviewed channel whose raw row the study profile lists (RAW_ROWS:
+    rsp_raw) gets it, placed just before the channel; build_raw() then shows
+    the raw row in the channel's place (a file without it is stopped earlier,
+    in session_checks_before_viewer). The channel itself stays in the result,
+    since its marks are still read, seeded and saved under its own name.
     """
     order = list(channel_configs)
     after = {}
@@ -81,8 +88,14 @@ def combine_with_reference_channels(channel_configs, df, ppg_guide=False, sideca
         for guide_key, (scored, reason) in session_guides(channel_configs, df, sidecar, ecg_ppg_guide).items():
             if reason is None:
                 after.setdefault(max(scored, key=order.index), []).append(guide_key)
+    above = {}
+    for raw_key, parent in raw_rows_for(channel_configs).items():
+        if raw_key in df.columns and not df[raw_key].isna().all():
+            above.setdefault(parent, []).append(raw_key)
     combined = {}
     for key, cfg in channel_configs.items():
+        for raw_key in above.get(key, []):
+            combined[raw_key] = RAW_ROWS[raw_key]
         combined[key] = cfg
         for full_key, full_cfg in FULL_RANGE_CHANNELS.items():
             values = df[key].dropna() if key in df.columns else ()
@@ -99,6 +112,56 @@ def combine_with_reference_channels(channel_configs, df, ppg_guide=False, sideca
 def full_range_banner_lines(full_channel_configs):
     """The opening-banner line for each full-range row on screen (combine_with_reference_channels)."""
     return [FULL_RANGE_TEXT for key in FULL_RANGE_CHANNELS if key in full_channel_configs]
+
+
+def raw_row_banner_lines(full_channel_configs, sidecar=None):
+    """
+    PEBBL's line on how each raw row on screen (RAW_ROWS) works. Steps 2 and 3.
+    The row's own sidecar Description isn't printed: the reviewed channel's is
+    (print_sidecar_banner), and it is the single text of the study's rules for
+    judging on the row (agreed with physiopipe, 2026-11-08: rsp's, not rsp_raw's).
+    """
+    return [RAW_ROWS[key]["text"] for key in RAW_ROWS if key in full_channel_configs]
+
+
+def raw_row_size_exclusions(full_channel_configs, sidecar, n_samples):
+    """
+    {raw row: [[start, end), ...]}: the rows its size leaves out
+    (physio_io.compute_scalings exclude), i.e. its reviewed channel's machine
+    stretches for the reasons in size_without_reasons (the belt's limit and
+    swings). Nothing when the sidecar has no valid breakdown: then the whole
+    recording sets the size.
+    """
+    out = {}
+    for key, cfg in full_channel_configs.items():
+        reasons = cfg.get("size_without_reasons")
+        if not reasons or not sidecar:
+            continue
+        read, _note = machine_qc_segments(sidecar, n_samples, only=[cfg["raw_of"]])
+        entry = read.get(cfg["raw_of"]) or {}
+        by_reason = None if entry.get("by_reason_invalid") else entry.get("by_reason")
+        spans = [span for reason in reasons for span in (by_reason or {}).get(reason, [])]
+        if spans:
+            out[key] = spans
+    return out
+
+
+def missing_raw_row_message(channel_configs, df):
+    """
+    The stop message when the study profile lists a raw row for a reviewed
+    channel but the file lacks it (no column, or all NaN), else None. The
+    study's RA rules are written for that row, so the review can't follow
+    them without it.
+    """
+    missing = [raw_key for raw_key in raw_rows_for(channel_configs)
+               if raw_key not in df.columns or df[raw_key].isna().all()]
+    if not missing:
+        return None
+    raw_key = missing[0]
+    label = channel_configs[RAW_ROWS[raw_key]["raw_of"]]["label"]
+    return (f"This file has no {raw_key} column ({RAW_ROWS[raw_key]['what']}), which this study's {label} review "
+            f"needs. It was probably written before the pipeline's update. Nothing has been changed. Please tell the "
+            f"lab staff.")
 
 
 def _inside(i, segments):
@@ -1380,6 +1443,10 @@ def session_checks_before_viewer(channel_configs, sidecar, allow_old_ppg, df=Non
     blank = empty_channels(df, reviewed) if df is not None else []
     if blank:
         raise SystemExit(no_data_message(blank))
+    # A raw row the study's RA rules rely on (study profile raw_rows; HLU, 2026-11-08).
+    missing = missing_raw_row_message(channel_configs, df) if df is not None else None
+    if missing:
+        raise SystemExit(missing)
     if "ppg" in reviewed and not allow_old_ppg and not new_pipeline_ppg(sidecar):
         raise SystemExit("This file was processed before the PPG timing fix (its sidecar has no CareTaker timing "
                          "record), so its PPG can't be reviewed yet. Please tell the lab staff (lab staff: "
@@ -1514,7 +1581,9 @@ def run_stage_b(df, sfreq, channel_configs, initials, out_dir, file_stem, source
 
     raw = build_raw(df, full_channel_configs, sfreq)
     reviewed_keys = [k for k, cfg in full_channel_configs.items() if cfg["annotation_mode"] in ("point", "segment")]
-    current_provenance = companion_provenance(channel_provenance(tsv_path, sidecar, reviewed_keys, len(df)))
+    raw_columns = {parent: raw_key for raw_key, parent in raw_rows_for(channel_configs).items()}
+    current_provenance = companion_provenance(channel_provenance(tsv_path, sidecar, reviewed_keys, len(df),
+                                                                 raw_columns=raw_columns))
 
     saved = load_saved_annotations(out_dir, file_stem, initials, sfreq=sfreq, n_samples=len(df))
     saved_channels = {}
@@ -1588,6 +1657,11 @@ def run_stage_b(df, sfreq, channel_configs, initials, out_dir, file_stem, source
         machine_qc = {k: read[src] for k, src in source.items() if src in read}
         if qc_note and not any(uses_machine_qc(k, full_channel_configs[k]) for k in fresh_segment):
             qc_note = None  # e.g. an EMG-only session: the machine never checks EMG anyway
+    # Machine stretches the study's analysis applies from the sidecar itself
+    # (study profile hidden_machine_reasons; HLU, 2026-11-08): not shown, so
+    # RAs can't remove them; the seed record keeps them under "not_shown".
+    hidden_reasons = study_profile.active().hidden_machine_reasons
+    machine_qc = {k: hide_machine_reasons(v, hidden_reasons.get(k, ())) for k, v in machine_qc.items()}
     mostly_flagged = [k for k, v in machine_qc.items()
                       if machine_qc_flagged_fraction(v, len(df)) > MACHINE_QC_FLAGGED_WARNING_FRACTION]
     # Channels whose machine stretches the analysis uses whatever the RA marks
@@ -1598,10 +1672,11 @@ def run_stage_b(df, sfreq, channel_configs, initials, out_dir, file_stem, source
     # decision B1), go into the seed record and the summary's note too.
     seed_records = {k: {"source": "MachineQC", "rule": v["rule"], "segments": v["segments"],
                         "pipeline_commit": commit,
-                        **({"by_reason": v["by_reason"]} if v.get("by_reason") is not None else {})}
+                        **({"by_reason": v["by_reason"]} if v.get("by_reason") is not None else {}),
+                        **({"not_shown": v["hidden_by_reason"]} if v.get("hidden_by_reason") else {})}
                     for k, v in machine_qc.items()}
     seed_notes = {k: f"started from {len(v['segments'])} machine-flagged stretch(es)"
-                     + (f": {reason_summary(v.get('by_reason'))}" if reason_summary(v.get("by_reason")) else "")
+                     + (f": {reason_summary(v.get('by_reason'), k)}" if reason_summary(v.get("by_reason")) else "")
                   for k, v in machine_qc.items()}
     # PPG's machine-invalid stretches (device zero runs, bridged samples) for
     # the PPG check lines (ppg-plan §4b). PPG is a point channel, so they are
@@ -1625,7 +1700,8 @@ def run_stage_b(df, sfreq, channel_configs, initials, out_dir, file_stem, source
     raw = seed_annotations(raw, df, full_channel_configs, saved_channels, sfreq, machine_qc=machine_qc,
                            exclude_seeds=exclude_seeds)
 
-    scalings = compute_scalings(df, full_channel_configs)
+    scalings = compute_scalings(df, full_channel_configs,
+                                exclude=raw_row_size_exclusions(full_channel_configs, sidecar, len(df)))
     clamp_display_rows(raw, full_channel_configs, scalings)
     events_array = compute_event_transitions(df, "event", sfreq)
 
@@ -1681,7 +1757,7 @@ def run_stage_b(df, sfreq, channel_configs, initials, out_dir, file_stem, source
               + (f" ({left} automated peak(s) inside the pre-marked stretches weren't loaded)." if left else "."))
     for line in guide_banner_lines(channel_configs, df, ppg_guide, sidecar, ecg_ppg_guide):
         print(f" - {line}")
-    for line in full_range_banner_lines(full_channel_configs):
+    for line in full_range_banner_lines(full_channel_configs) + raw_row_banner_lines(full_channel_configs, sidecar):
         print(f" - {line}")
     value_range_lines = format_channel_value_ranges(
         compute_channel_value_ranges(df, full_channel_configs), full_channel_configs

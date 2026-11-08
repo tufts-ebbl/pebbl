@@ -784,6 +784,43 @@ the guide rows on or off (`channel_config.FULL_RANGE_CHANNELS`).
 - **Tests:** `test_cor_display.py`, on `fixtures/cor_planted_75-140s.npz`
   (physiopipe's planted COR; origin in `fixtures/README.md`).
 
+#### RSP as the belt as recorded (`rsp_raw`)
+
+**In a study whose profile has `raw_rows = ["rsp_raw"]`** (urglab; HLU,
+2026-11-08), RSP is shown as `rsp_raw`, the breathing belt as recorded,
+**in place of** the filtered `rsp` row, in Steps 2 and 3
+(`channel_config.RAW_ROWS`). The plan and its decisions are in
+pebbl-private, `pebbl_rsp-raw-row-plan_20261108-1108.md`.
+- **Why:** physiopipe's RA rules judge breathing on the belt as recorded.
+  The filter turns a sudden belt step into a smooth dip that looks like an
+  ordinary breath, and HLU wanted RAs to mark on the one row they look at.
+- **Saved exactly as before:** a mark belongs to time and saves by its label
+  (`bad_rsp` -> `rsp`), whichever row it is drawn on. `rsp` stays in the
+  session's channel configs (seeded, read and saved under its own name);
+  `build_raw` just gives it no row, and `is_present` counts it present
+  through `rsp_raw`. Its provenance adds `raw_column` and `raw_signal_sha256`,
+  checked on reopening, and its `value_range` is `rsp_raw`'s.
+- **Required:** a review of RSP on a file without the column (or all NaN)
+  stops (`missing_raw_row_message`). sdi and the built-in settings are
+  unchanged.
+- **Size and cut** (from the render check on physiopipe's synthetic belt,
+  HLU's "Option 3"): half the middle-95% range of `rsp_raw` leaving out RSP's
+  machine stretches for `rail` and `swing` (`raw_row_size_exclusions`), cut at
+  2.5 times that (`clamp_display` 2.5). A cut at the row's own edge, as for
+  COR, drew the slow drift back after a belt step as a flat line, like a dead
+  belt; no cut lost a stretch held at the belt's limit off-screen.
+- **Text:** the console prints `rsp`'s sidecar Description (the study's RA
+  rules, agreed with physiopipe: not `rsp_raw`'s) and PEBBL's line about the
+  row (`RAW_ROWS["rsp_raw"]["text"]`). RSP's machine reasons have plain names
+  (`physio_io.CHANNEL_REASON_LABELS`, keyed by channel).
+- **Hidden machine stretches:** the profile's `hidden_machine_reasons`
+  (urglab: `{ rsp = ["filter_edge"] }`) leaves out of the pre-filled stretches
+  the reasons the study's analysis applies itself, so RAs can't remove them
+  (`physio_io.hide_machine_reasons`); the console says how many, and the saved
+  `seed` keeps them under `not_shown`.
+- **Tests:** `test_rsp_raw_row.py`, on `fixtures/rsp_raw_planted_130-180s.npz`
+  (physiopipe's synthetic breathing file; origin in `fixtures/README.md`).
+
 ### Reviewing PPG
 
 PPG peaks are reviewed in a **session of their own** (`--channels ppg`, or

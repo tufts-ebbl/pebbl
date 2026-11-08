@@ -1,10 +1,11 @@
 """
 Capture PEBBL screens from SYNTHETIC data for the RA manual (offscreen; no windows appear).
 
-Writes docs/img/form.png, ecg_viewer.png, eda_viewer.png, rsp_hold.png, rsp_clip.png, summary.png and
+Writes docs/img/form.png, ecg_viewer.png, eda_viewer.png, rsp_hold.png, rsp_clip.png, rsp_raw_swing.png,
+summary.png and
 practice_report.png, for developers updating the manual. Run from the tool folder, with Windows fonts for Qt:
 
-    QT_QPA_FONTDIR=C:/Windows/Fonts annotate_env/Scripts/python.exe docs/capture_manual_shots.py [form ecg eda rsp summary report]
+    QT_QPA_FONTDIR=C:/Windows/Fonts annotate_env/Scripts/python.exe docs/capture_manual_shots.py [form ecg eda rsp rspraw summary report]
 
 The RSP pictures show the RSP rule (HLU, 2026-10-05) on synthetic breathing, at times unlike the practice
 recordings': a held breath and clipped tops are bad; a sigh and shallow breathing are real.
@@ -39,7 +40,7 @@ from channel_config import CHANNELS  # noqa: E402
 from physio_io import generate_synthetic_demo  # noqa: E402
 from simple_gui import ReviewLauncherDialog  # noqa: E402
 
-which = sys.argv[1:] or ["form", "ecg", "eda", "rsp", "summary", "report"]
+which = sys.argv[1:] or ["form", "ecg", "eda", "rsp", "rspraw", "summary", "report"]
 ORIG_PLOT = mne.io.RawArray.plot
 RSP_BAD = {}  # (onset, duration) in seconds of each RSP picture's bad_rsp stretch, set by its edit
 
@@ -178,6 +179,20 @@ def rsp_clip_and_shallow(df, sfreq):
     df["rsp"] = rsp
 
 
+def rsp_raw_swing(df, sfreq):
+    # The belt as recorded, the row a study with raw_rows = ["rsp_raw"] shows for RSP (HLU, 2026-11-08): the
+    # demo's breathing, centred, plus at 48 s a sudden step down about three breaths deep that drifts back over
+    # a few seconds (the recorder removes slow levels), as when the belt shifts at a task event. Marked from
+    # just before the step to where the drift has mostly gone.
+    rsp = df["rsp"].to_numpy(dtype=float)
+    _, _, depth = breaths(rsp, sfreq)
+    t = np.arange(len(rsp)) / sfreq
+    t0 = 48.0
+    step = np.where(t >= t0, -3.0 * depth * np.exp(-(t - t0) / 3.0), 0.0)
+    df["rsp_raw"] = rsp - float(np.mean(rsp)) + step
+    RSP_BAD["swing"] = (t0 - 0.3, 7.3)
+
+
 def mark_bad_rsp(key):
     return lambda raw: raw.annotations.append(*RSP_BAD[key], "bad_rsp")
 
@@ -235,6 +250,14 @@ if "eda" in which:
 if "rsp" in which:
     viewer_shot("rsp_hold.png", ["rsp"], 20, before=mark_bad_rsp("hold"), edit_df=rsp_hold_and_sigh)
     viewer_shot("rsp_clip.png", ["rsp"], 68, before=mark_bad_rsp("clip"), edit_df=rsp_clip_and_shallow)
+if "rspraw" in which:
+    import study_profile
+    study_profile.activate(study_profile.StudyProfile(name="mystudy", task="mystudy", path="example",
+                                                      sha256="example", raw_rows=["rsp_raw"]))
+    try:
+        viewer_shot("rsp_raw_swing.png", ["rsp"], 40, before=mark_bad_rsp("swing"), edit_df=rsp_raw_swing)
+    finally:
+        study_profile.activate(study_profile.BUILT_IN)
 if "summary" in which:
     shot_summary()
 print("saved:", sorted(os.listdir(OUT)))

@@ -120,7 +120,7 @@ footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);color:v
     <p class="tag">Please Eyeball Before Believing Labels.</p>
   </div>
 </header>
-<p class="meta">For research assistants. Updated 1 November 2026. If anything here doesn't match what you see, tell the lab staff.</p>
+<p class="meta">For research assistants. Updated 8 November 2026. If anything here doesn't match what you see, tell the lab staff.</p>
 
 <nav class="toc" aria-label="Contents">
   <span class="h">Contents</span>
@@ -257,7 +257,7 @@ git clone https://github.com/tufts-ebbl/pebbl.git</pre>
   <tbody>
     <tr><td>ECG</td><td>The heart's electrical activity, from stickers on the chest. Each heartbeat makes one tall, sharp spike: the <strong>R peak</strong>.</td><td>A peak on every R peak</td></tr>
     <tr><td>PPG</td><td>The pulse in a fingertip, from a sensor on a finger. Each heartbeat makes one smooth wave, reaching the finger a fraction of a second after the R peak.</td><td>A peak on every pulse</td></tr>
-    <tr><td>RSP</td><td>Breathing, from a stretchy belt around the torso. One rise and fall per breath.</td><td>Bad stretches</td></tr>
+    <tr><td>RSP</td><td>Breathing, from a stretchy belt around the torso. One rise and fall per breath. Some studies show it as <span class="path">rsp_raw</span>, the belt as recorded.</td><td>Bad stretches</td></tr>
     <tr><td>EDA</td><td>Skin conductance: tiny changes in sweat on the hand. Smooth rises lasting a few seconds are real responses.</td><td>Bad stretches</td></tr>
     <tr><td>COR</td><td>Activity of the frowning muscle above the eyebrow (corrugator EMG), in studies that record it. Shown twice: in fine detail, and at full range underneath.</td><td>Bad stretches</td></tr>
     <tr><td>SBP, DBP</td><td>Blood pressure, in studies that measure it at every heartbeat with a finger cuff: the upper number (systolic) and the lower (diastolic), in mmHg.</td><td>Bad stretches</td></tr>
@@ -368,11 +368,13 @@ git clone https://github.com/tufts-ebbl/pebbl.git</pre>
   <div class="mark"><div class="h">Mark bad</div><ul>
     <li><strong>Anywhere you can't see where each breath peaks:</strong> you can't place a peak you can't see.</li>
     <li>A flat line with no breaths, whether the belt stopped recording or a breath was held.</li>
-    <li>Clipped tops: breaths cut off flat at the very top of the recording's range.</li></ul></div>
+    <li>Clipped tops: breaths cut off flat at the very top of the recording's range.</li>
+    <li>A sudden drop or jump much bigger than a breath, often at a task event, then a slow drift back.</li></ul></div>
   <div class="keep"><div class="h">Leave alone</div><ul>
     <li><strong>Breaths whose peaks you can see,</strong> however odd: sighs, shallow breathing and pauses between breaths are all real.</li></ul></div>
 </div>
 <p>The review starts with the computer's flags; check each one. The EDA guide row underneath helps: a rise in EDA 1 to 3 seconds after a big breath shows the breath was real. Never mark RSP bad because of EDA.</p>
+<p>In some studies the RSP row is <span class="path">rsp_raw</span>: the belt as recorded, before any filtering. Judge and mark there, with <span class="label">bad_rsp</span> as usual; your marks are saved for RSP. Anything much taller than a breath is cut off flat a little beyond the row. A study may also leave some of the computer's flags off the screen, such as the first and last seconds of a recording. The opening lines in the terminal say which. Those count in the analysis whatever you mark.</p>
 </div>
 <figure>
   <img src="img/rsp_hold.png" alt="An RSP review: a deep breath near 27 s is left unmarked, and the EDA guide row rises about 3 seconds after its top. A shaded bad_rsp stretch from about 31 to 38 s covers a flat line where a breath was held." width="1280" height="720">
@@ -381,6 +383,10 @@ git clone https://github.com/tufts-ebbl/pebbl.git</pre>
 <figure>
   <img src="img/rsp_clip.png" alt="An RSP review: a shaded bad_rsp stretch from about 68.5 to 76 s covers two breaths whose tops are cut flat at the same height. After it, one normal breath and then smaller breaths with rounded tops are left unmarked." width="1280" height="720">
   <figcaption>Clipped tops, marked <span class="label">bad_rsp</span>: two deep breaths cut flat at the top of the recording's range. The shallow breaths after them still show their peaks, so they stay unmarked.</figcaption>
+</figure>
+<figure>
+  <img src="img/rsp_raw_swing.png" alt="An RSP review on the rsp_raw row: at 48 s the belt drops suddenly, far deeper than a breath, its bottom cut flat, then drifts slowly back. A shaded bad_rsp stretch from about 47.7 to 55 s covers the drop and the drift. The ordinary breaths before and after it are left unmarked." width="1280" height="720">
+  <figcaption>A belt swing, marked <span class="label">bad_rsp</span>, in a study that shows <span class="path">rsp_raw</span>: a sudden drop much bigger than a breath, then a slow drift back. The mark runs from just before the drop to where ordinary breathing is back. The bottom of the drop is cut off flat because it's much taller than a breath.</figcaption>
 </figure>
 
 <div class="chan">
