@@ -789,13 +789,6 @@ def load_saved_annotations(out_dir, file_stem, initials, sfreq=None, n_samples=N
     return channels, path
 
 
-def _annotation_channels(annotation, raw_ch_names):
-    """mne stores per-annotation ch_names as a tuple; empty tuple means 'all channels'."""
-    if not annotation:
-        return list(raw_ch_names)
-    return list(annotation)
-
-
 FALLBACK_MERGE_WARNING_SEC = 0.4
 MIN_MERGE_WARNING_SEC = 0.15
 MERGE_WARNING_FRACTION_OF_INTERVAL = 0.5
@@ -892,6 +885,14 @@ def export_annotations(raw, df, channel_configs, sfreq, snap_window_samples=None
     peak-to-peak interval -- see _merge_warning_threshold()'s docstring for
     why that's a strong signal of two peaks having been silently merged
     into one during editing.
+
+    A mark counts for the channel its label names, whatever row it's tied to
+    (HLU, 2026-11-08). Shift+click on a mark in the viewer ties it to one row
+    (MNE's single-channel annotation: faint, with a dashed outline). This
+    used to keep such a mark only for channels whose row it named, so one
+    tied to a guide row, the COR full-range row or another channel's row was
+    silently left out of the save. Steps 1 and 3 never looked at the tie, so
+    all three steps now agree. single_row_mark_lines() tells the RA.
     """
     if snap_window_samples is None:
         snap_window_samples = round(DEFAULT_SNAP_WINDOW_SEC * sfreq)
@@ -913,10 +914,9 @@ def export_annotations(raw, df, channel_configs, sfreq, snap_window_samples=None
     for ann in raw.annotations:
         onset_sample = int(round(ann["onset"] * sfreq))
         duration_samples = int(round(ann["duration"] * sfreq))
-        ch_names = _annotation_channels(ann.get("ch_names", ()), raw.ch_names)
 
         for ch_key, cfg in channel_configs.items():
-            if not is_present(ch_key, cfg, raw.ch_names) or not is_present(ch_key, cfg, ch_names):
+            if not is_present(ch_key, cfg, raw.ch_names):
                 continue
 
             if cfg["annotation_mode"] == "point" and ann["description"] == cfg["point_label"]:
@@ -1787,7 +1787,7 @@ def run_stage_b(df, sfreq, channel_configs, initials, out_dir, file_stem, source
     known_labels = _known_labels(full_channel_configs)
 
     def step2_checks(r, outputs):
-        lines = unknown_label_lines(r, known_labels)
+        lines = unknown_label_lines(r, known_labels) + single_row_mark_lines(r)
         # Repeat the "machine flagged nearly all of this run" warning in the
         # summary for as long as the RA has removed most of that flag, so a
         # dead sensor isn't saved as usable without a second look
@@ -1939,6 +1939,19 @@ def _format_warning_lines(merges, flagged, channel_configs, extra_lines=()):
                   f"{median * 1000:.0f} ms)"
                   for ch, onset, interval, median, _kind in flags]
     return lines
+
+
+def single_row_mark_lines(raw):
+    """
+    A check line when any mark is tied to one row (Shift+click on a mark in
+    the viewer). Such a mark still looks faint on screen, but it is saved for
+    its label's channel like any other (export_annotations; HLU, 2026-11-08),
+    so the line only says so.
+    """
+    tied = sum(1 for names in raw.annotations.ch_names if len(names))
+    if not tied:
+        return []
+    return [f"{tied} mark(s) tied to one row (Shift+click): saved as ordinary marks covering every row"]
 
 
 def unknown_label_lines(raw, known_labels):
