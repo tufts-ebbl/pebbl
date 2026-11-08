@@ -269,8 +269,27 @@ device dropout, plus a recovery margin after it); from run 10, PPG's
 counter_loss (pulse rows the CareTaker app lost in transfer, plus the
 beat-wide bracket around the splice; present, possibly empty, in every pulse
 run; not part of ppg_dropout, since the device kept measuring BP there).
-RSP and EDA have none.
+RSP and EDA have none there. Another study's pipeline may use the same key
+for something else, so names for one channel only go in CHANNEL_REASON_LABELS.
 An unknown key is shown by its own name.
+"""
+
+CHANNEL_REASON_LABELS = {
+    ("rsp", "flat"): "no breathing movement",
+    ("rsp", "flat_raw"): "belt output dead or unplugged",
+    ("rsp", "snr"): "doesn't look like breathing",
+    ("rsp", "rail"): "belt at its limit",
+    ("rsp", "swing"): "sudden belt step bigger than a breath",
+    ("rsp", "filter_edge"): "first or last 20 s",
+    ("rsp", "ecg_unconfirmed"): "belt doesn't follow the breathing seen in the heartbeat",
+}
+"""
+Plain names for one channel's reasons, by (channel, key). RSP's are physiopipe's
+urglab reasons (2026-11-08): flat and flat_raw in HLU's words, the others
+PEBBL's, approved by HLU (pebbl_rsp-raw-row-plan_20261108-1108.md, D3). They
+come first; a key not here falls back to REASON_LABELS, then to its own name.
+Keyed by channel because the same key means different things on different
+channels (physiopipe's rail is also a PPG reason, filter_edge a COR one).
 """
 
 
@@ -318,14 +337,16 @@ def coverage_only(entry):
     return bool(given) and all(reason in COVERAGE_REASONS for reason in given)
 
 
-def reason_summary(by_reason):
+def reason_summary(by_reason, channel=None):
     """
     'no CareTaker reading (11), out of range (1)': the non-empty reasons and
     their span counts, or '' when there is no breakdown. The counts need not
     add up to the number of bad stretches: those are the reasons' union.
+    channel: the session channel the reasons are for, for CHANNEL_REASON_LABELS.
     """
-    return ", ".join(f"{REASON_LABELS.get(reason, reason)} ({len(spans)})"
-                     for reason, spans in (by_reason or {}).items() if spans)
+    def name(reason):
+        return CHANNEL_REASON_LABELS.get((channel, reason)) or REASON_LABELS.get(reason, reason)
+    return ", ".join(f"{name(reason)} ({len(spans)})" for reason, spans in (by_reason or {}).items() if spans)
 
 
 def machine_qc_segments(meta, n_samples, only=None, labels=None):
@@ -433,6 +454,39 @@ def short_no_reading_gaps(entry, n_samples, sfreq):
                if start > 0 and end < n_samples and (end - start) / sfreq < NO_READING_SLIVER_SEC)
 
 
+def _merged(spans):
+    """Sorted [start, end) spans with overlapping or touching ones joined."""
+    out = []
+    for start, end in sorted(spans):
+        if out and start <= out[-1][1]:
+            out[-1][1] = max(out[-1][1], end)
+        else:
+            out.append([start, end])
+    return out
+
+
+def hide_machine_reasons(entry, reasons):
+    """
+    The machine_qc_segments() entry without the stretches of `reasons`, which
+    the study's analysis applies from the sidecar itself, so RAs don't see
+    them and can't remove them (study profile hidden_machine_reasons; HLU,
+    2026-11-08: physiopipe's RSP filter_edge). The rest are rebuilt as the
+    union of the other reasons, so a stretch another reason also covers stays;
+    what was taken out goes under "hidden_by_reason". Done only when the
+    breakdown is valid and its union is exactly the bad stretches (physiopipe's
+    contract); otherwise the entry comes back unchanged, everything shown.
+    """
+    by_reason = entry.get("by_reason")
+    if not reasons or not by_reason or entry.get("by_reason_invalid"):
+        return entry
+    hidden = {r: spans for r, spans in by_reason.items() if r in reasons and spans}
+    if not hidden or _merged([s for spans in by_reason.values() for s in spans]) != _merged(entry["segments"]):
+        return entry
+    kept = {r: spans for r, spans in by_reason.items() if r not in reasons}
+    return {**entry, "segments": _merged([s for spans in kept.values() for s in spans]), "by_reason": kept,
+            "hidden_by_reason": hidden}
+
+
 def machine_qc_notes(qc_channels, channel_keys, n_samples, sfreq, labels, value_ranges=None, units=None, keep=()):
     """
     Opening-banner lines for pre-filled channels: how much the machine
@@ -447,10 +501,15 @@ def machine_qc_notes(qc_channels, channel_keys, n_samples, sfreq, labels, value_
     8), a line says why it flagged them. For the channels in `keep`
     (channel_config.keeps_machine_stretches), both lines say to leave the
     machine's stretches: the analysis uses them whatever the RA marks.
+    Stretches not shown (hide_machine_reasons) get a line saying so.
     """
     lines = []
     for ch_key in channel_keys:
         entry = qc_channels.get(ch_key)
+        if entry and entry.get("hidden_by_reason"):
+            lines.append(f"{labels.get(ch_key, ch_key)}: not shown, the machine's "
+                         f"{reason_summary(entry['hidden_by_reason'], ch_key)}: the analysis leaves those stretches "
+                         f"out whatever you mark.")
         if not entry or not entry["segments"]:
             continue
         label = labels.get(ch_key, ch_key)
@@ -480,7 +539,7 @@ def machine_qc_notes(qc_channels, channel_keys, n_samples, sfreq, labels, value_
         else:
             lines.append(f"{label}: starts with {len(entry['segments'])} machine-flagged bad stretch(es) "
                          f"({fraction:.1%} of the run). Check each one: remove any that are fine, add any it missed.")
-        why = reason_summary(entry.get("by_reason"))
+        why = reason_summary(entry.get("by_reason"), ch_key)
         if why:
             lines.append(f"{label}: why the machine flagged them: {why}.")
         slivers = short_no_reading_gaps(entry, n_samples, sfreq)
@@ -626,7 +685,7 @@ def generate_synthetic_demo(duration_sec=60, sfreq=1000, heart_rate=70, seed=42)
 DEGENERATE_SCALE_FLOOR = 1e-8
 
 
-def compute_scalings(df, channel_configs):
+def compute_scalings(df, channel_configs, exclude=None):
     """
     Builds a per-channel-TYPE scalings dict for raw.plot(), because MNE's
     'auto'/default scalings assume real physiological units (volts, etc.)
@@ -648,6 +707,12 @@ def compute_scalings(df, channel_configs):
     study that collects it) automatically gets its own properly auto-fit
     scale the moment real data replaces the placeholder -- no config
     change needed.
+
+    exclude ({row: [[start, end), ...]}) leaves those rows of the data out
+    of that row's own range: a raw row's (channel_config.RAW_ROWS) size
+    skips its parent's machine stretches for the belt's limit and swings,
+    so a recording that often hits them keeps visible breaths. If they
+    cover everything, all rows count.
     """
     raw_scales = {}  # mne_type -> scale (may be NaN)
 
@@ -660,6 +725,13 @@ def compute_scalings(df, channel_configs):
             continue  # first channel of a shared type sets the scale (MNE scalings are per-type)
 
         data = df[column].to_numpy(dtype=float)
+        spans = (exclude or {}).get(ch_key)
+        if spans:
+            kept = np.ones(len(data), dtype=bool)
+            for start, end in spans:
+                kept[start:end] = False
+            if kept.any() and not np.all(np.isnan(data[kept])):
+                data = data[kept]
         if np.all(np.isnan(data)):
             raw_scales[mne_type] = np.nan
         elif "full_range_of" in cfg:
@@ -687,12 +759,16 @@ def clamp_display_rows(raw, channel_configs, scalings):
     (shown up to 3 rows' height, blank beyond). The data saved reviews are
     made from (df) are untouched; the viewer's value readout on a clamped row
     stops at the edge.
+
+    A number instead of True cuts at that many times the scale (a raw row,
+    channel_config.RAW_ROWS: 2.5).
     """
     for ch in raw.ch_names:
         cfg = channel_configs.get(ch) or {}
-        limit = scalings.get(cfg.get("mne_type"))
-        if not cfg.get("clamp_display") or not limit:
+        scale = scalings.get(cfg.get("mne_type"))
+        if not cfg.get("clamp_display") or not scale:
             continue
+        limit = float(cfg["clamp_display"]) * scale  # True counts as 1
         # Picked by position: a row named like an MNE type (e.g. "ecg") is ambiguous by name.
         raw.apply_function(lambda x, limit=limit: np.clip(x, np.nanmean(x) - limit, np.nanmean(x) + limit),
                            picks=[raw.ch_names.index(ch)])
@@ -708,12 +784,16 @@ def compute_channel_value_ranges(df, channel_configs):
     not just waveform shape). NaN-safe (real CareTaker sbp/dbp data has
     real dropped-signal stretches, same as PPG). A channel that's entirely
     NaN, or not present in df at all, is simply omitted from the result.
+    A channel shown as its raw row (channel_config.RAW_ROWS: rsp as rsp_raw)
+    reports the raw row's values, the ones on screen.
     """
+    shown_as = {cfg["raw_of"]: key for key, cfg in channel_configs.items() if cfg.get("raw_of")}
     ranges = {}
     for ch_key, cfg in channel_configs.items():
-        if cfg.get("annotation_mode") != "segment" or ch_key not in df.columns:
+        column = shown_as.get(ch_key, ch_key)
+        if cfg.get("annotation_mode") != "segment" or column not in df.columns:
             continue
-        series = df[ch_key].dropna()
+        series = df[column].dropna()
         if series.empty:
             continue
         ranges[ch_key] = (float(series.min()), float(series.mean()), float(series.max()))
@@ -758,9 +838,13 @@ def build_raw(df, channel_configs, sfreq):
     """
     Builds an mne.RawArray containing every channel in channel_configs that
     is actually present as a column in df, tagged with the mne channel type
-    declared in channel_configs (channel_config.py).
+    declared in channel_configs (channel_config.py). A channel whose raw row
+    (channel_config.RAW_ROWS) is in channel_configs gets no row of its own:
+    the raw row is shown in its place.
     """
-    available = [ch for ch in channel_configs if channel_configs[ch].get("full_range_of", ch) in df.columns]
+    shown_as_raw = {cfg["raw_of"] for cfg in channel_configs.values() if cfg.get("raw_of")}
+    available = [ch for ch in channel_configs
+                 if ch not in shown_as_raw and channel_configs[ch].get("full_range_of", ch) in df.columns]
     if not available:
         raise ValueError("None of the configured channels were found in the data.")
 

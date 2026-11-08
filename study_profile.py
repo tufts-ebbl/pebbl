@@ -25,6 +25,12 @@ study it was first built for, task "sdi"; also what synthetic demo data use):
     keep_machine_stretches = ["emg_cor"]  # channels whose machine-flagged bad stretches RAs leave
                                         # and only add to: the study's analysis uses them whatever
                                         # the RA marks (built in: none)
+    raw_rows = ["rsp_raw"]              # a channel's signal as recorded, shown read-only above it, where
+                                        # RAs judge and mark; a review of a file without it stops
+                                        # (built in: none; channel_config.RAW_ROWS)
+    hidden_machine_reasons = { rsp = ["filter_edge"] }   # machine-flagged stretches, by reason, that the
+                                        # study's analysis applies from the sidecar itself whatever RAs
+                                        # mark: not shown, so they can't be removed (built in: none)
     [event_labels]                      # names shown beside event codes (built in: numbers only)
     0 = "off task"
     50 = "baseline"
@@ -62,7 +68,7 @@ BUILT_IN_TASK = "sdi"
 TASK_PATTERN = re.compile(r"^[A-Za-z0-9]+$")  # a BIDS label: letters and digits only
 SETTINGS = {"schema_version", "name", "task", "runs", "channels", "practice", "ppg_requires_timing_marker",
             "bad_ecg_from_machine_qc", "ecg_inversion_option", "event_labels", "ecg_seed_snap_ms",
-            "keep_machine_stretches"}
+            "keep_machine_stretches", "raw_rows", "hidden_machine_reasons"}
 BUILT_IN_SEED_SNAP_MS = 15  # Step 1's seed window; 50 ms until 2026-10-31 (qrs_template.seed_snap_samples)
 FLAGS = {"practice": True, "ppg_requires_timing_marker": True, "bad_ecg_from_machine_qc": False,
          "ecg_inversion_option": False}  # each flag's built-in value
@@ -72,7 +78,8 @@ class StudyProfile:
     """One study's settings: the built-in ones (path None) or a profile file's."""
 
     def __init__(self, name, task, path=None, sha256=None, runs=("1", "2"), channels=None, event_labels=None,
-                 ecg_seed_snap_ms=BUILT_IN_SEED_SNAP_MS, keep_machine_stretches=(), **flags):
+                 ecg_seed_snap_ms=BUILT_IN_SEED_SNAP_MS, keep_machine_stretches=(), raw_rows=(),
+                 hidden_machine_reasons=None, **flags):
         self.name = name
         self.task = task
         self.path = path
@@ -80,6 +87,8 @@ class StudyProfile:
         self.runs = list(runs)
         self.ecg_seed_snap_ms = ecg_seed_snap_ms
         self.keep_machine_stretches = list(keep_machine_stretches)
+        self.raw_rows = list(raw_rows)
+        self.hidden_machine_reasons = {k: list(v) for k, v in (hidden_machine_reasons or {}).items()}
         self.channels = None if channels is None else list(channels)  # None: every channel PEBBL knows
         self.event_labels = dict(event_labels or {})  # {code: name}
         for flag, default in FLAGS.items():
@@ -175,6 +184,35 @@ def read_profile(path):
             if absent:
                 _refuse(path, f"keep_machine_stretches has channel(s) that channels doesn't offer: {', '.join(absent)}")
         optional["keep_machine_stretches"] = keep
+    if "raw_rows" in settings:
+        from channel_config import RAW_ROWS
+        rows = settings["raw_rows"]
+        if not isinstance(rows, list) or not all(isinstance(r, str) for r in rows) or len(set(rows)) != len(rows):
+            _refuse(path, 'raw_rows must be a list of row names, e.g. ["rsp_raw"]')
+        unknown_rows = [r for r in rows if r not in RAW_ROWS]
+        if unknown_rows:
+            _refuse(path, f"raw_rows has name(s) PEBBL doesn't know: {', '.join(unknown_rows)} "
+                          f"(it knows {', '.join(RAW_ROWS)})")
+        if "channels" in optional:
+            absent = [r for r in rows if RAW_ROWS[r]["raw_of"] not in optional["channels"]]
+            if absent:
+                _refuse(path, f"raw_rows has row(s) for channels that channels doesn't offer: {', '.join(absent)}")
+        optional["raw_rows"] = rows
+    if "hidden_machine_reasons" in settings:
+        from channel_config import CHANNELS, COMPANION_CHANNELS
+        hidden = settings["hidden_machine_reasons"]
+        if (not isinstance(hidden, dict)
+                or not all(isinstance(v, list) and v and all(isinstance(r, str) and r.strip() for r in v)
+                           and len(set(v)) == len(v) for v in hidden.values())):
+            _refuse(path, 'hidden_machine_reasons must map channels to lists of reason names, '
+                          'e.g. { rsp = ["filter_edge"] }')
+        segment = {k for k, cfg in {**CHANNELS, **COMPANION_CHANNELS}.items()
+                   if cfg.get("annotation_mode") == "segment"}
+        not_segment = [c for c in hidden if c not in segment]
+        if not_segment:
+            _refuse(path, f"hidden_machine_reasons has name(s) that aren't bad-stretch channels: "
+                          f"{', '.join(not_segment)} (they are {', '.join(sorted(segment))})")
+        optional["hidden_machine_reasons"] = hidden
     for flag in FLAGS:
         if flag in settings:
             if not isinstance(settings[flag], bool):
@@ -266,6 +304,8 @@ def main(argv=None):
         print(f"  {flag} = {str(getattr(profile, flag)).lower()}")
     print(f"  ecg_seed_snap_ms = {profile.ecg_seed_snap_ms}")
     print(f"  keep_machine_stretches = {profile.keep_machine_stretches or 'none'}")
+    print(f"  raw_rows = {profile.raw_rows or 'none'}")
+    print(f"  hidden_machine_reasons = {profile.hidden_machine_reasons or 'none'}")
     print(f"  event_labels = {profile.event_labels or 'none (numbers only)'}")
 
 

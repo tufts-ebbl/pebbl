@@ -411,8 +411,12 @@ def with_companions(channel_configs):
 
 
 def is_present(ch_key, cfg, names):
-    """Whether a channel is in the session's rows (a companion counts through its parent's row)."""
-    return ch_key in names or cfg.get("companion_of") in names
+    """
+    Whether a channel is in the session's rows: a companion counts through its
+    parent's row, and a channel shown as its raw row (RAW_ROWS) through that row.
+    """
+    return (ch_key in names or cfg.get("companion_of") in names
+            or any(raw_key in names for raw_key, raw_cfg in RAW_ROWS.items() if raw_cfg["raw_of"] == ch_key))
 
 # Read-only "guide" rows: another channel shown right under the one being
 # scored, for context only -- never annotated or exported, and shown exactly
@@ -484,6 +488,50 @@ FULL_RANGE_CHANNELS = {
 FULL_RANGE_TEXT = ("emg_cor_full: the same corrugator signal at full range, read-only; the recording's largest value "
                    "fills the row. Compare how tall things are there. emg_cor above it shows the fine detail, with "
                    "anything taller than its row cut off at the row's edge.")
+
+# "Raw rows" (HLU, 2026-11-08; pebbl-private pebbl_rsp-raw-row-plan_20261108-1108.md): a reviewed
+# channel's signal as recorded, before the pipeline's filter -- its own column in the file (physiopipe's
+# rsp_raw, the breathing belt as recorded) -- shown IN PLACE OF the reviewed channel's row. The study's RA
+# rules judge everything on it, and the filtered row added nothing but a busier screen and a filter that
+# makes a belt step look like an ordinary breath (HLU: "I think I want to only display rsp_raw"). Marks
+# save under the reviewed channel by their label (bad_rsp), exactly as before, since a mark belongs to
+# time, not to a row (annotation_io.export_annotations); is_present() counts the channel as on screen
+# through its raw row. Shown only where the study profile lists the row (study_profile raw_rows), and then
+# required: a review of a file without it stops (annotation_io.session_checks_before_viewer).
+# Its size and cut come from the render check on physiopipe's synthetic belt (HLU chose "Option 3",
+# 2026-11-08):
+#   - size: half the middle-95% range of the column, leaving out the reviewed channel's machine stretches
+#     for the reasons in size_without_reasons, so a recording that often hits the belt's limit keeps
+#     visible breaths (all rows when the sidecar has no valid breakdown; physio_io.compute_scalings);
+#   - cut: values beyond RAW_ROW_CUT x that size either side of the mean are cut at that line, in the
+#     viewer's copy only (physio_io.clamp_display_rows). Cutting at the row's own edge, as for COR, drew
+#     the slow drift back after a belt step as a flat line, like a dead belt; not cutting at all lost a
+#     stretch held at the belt's limit off-screen.
+# Its display type ("seeg") is used by no other row, so it gets its own scale (MNE scales by type).
+RAW_ROW_CUT = 2.5
+RAW_ROWS = {
+    "rsp_raw": {
+        "mne_type": "seeg",
+        "annotation_mode": "none",
+        "label": "RSP (belt as recorded)",
+        "raw_of": "rsp",
+        "what": "the breathing belt as recorded",
+        "clamp_display": RAW_ROW_CUT,
+        "size_without_reasons": ("rail", "swing"),
+        "text": ("rsp_raw: the breathing belt as recorded, before filtering. It's RSP's row in this study: judge "
+                 "and mark here (label bad_rsp). Anything much taller than a breath is cut off flat a little beyond "
+                 "the row."),
+    },
+}
+
+
+def raw_rows_for(channel_configs):
+    """{raw row: its reviewed channel} for this session: the study profile's raw rows whose channel is reviewed."""
+    wanted = study_profile.active().raw_rows
+    return {raw_key: cfg["raw_of"] for raw_key, cfg in RAW_ROWS.items()
+            if raw_key in wanted and (channel_configs.get(cfg["raw_of"]) or {}).get("annotation_mode")
+            in ("point", "segment")}
+
 
 GUIDE_TEXT = ("PPG (guide): the pulse, for counting beats -- each pulse follows an R peak by a fraction of a second. "
               "Use it to notice a missed or extra beat, never to decide where an R peak goes: the gap varies, and "
@@ -603,8 +651,11 @@ GUIDE_CONTEXT_TEXT = "Guide rows are context only: mark only what you see on the
 # misc: MNE has NO default at all for "misc" either -- same gap as "resp"/
 #       "stim". Shared by SBP and DBP (both genuinely mmHg, so no
 #       per-channel conflict the way "bio" would have been).
+# seeg: the raw breathing row (RAW_ROWS: rsp_raw, the belt as recorded, in volts like rsp). MNE's own
+#       default is raw Volts, 1e3x -> "mV". Set here rather than only from the sidecar's Units, because
+#       Step 3 takes unit labels from the reviewed channels alone.
 for _mne_type, _unit in (("ecg", "mV"), ("resp", "V"), ("bio", "AU"), ("gsr", "µS"), ("stim", "AU"),
-                          ("misc", "mmHg")):
+                          ("misc", "mmHg"), ("seeg", "V")):
     mne.defaults.DEFAULTS["units"][_mne_type] = _unit
     mne.defaults.DEFAULTS["si_units"][_mne_type] = _unit
     mne.defaults.DEFAULTS["scalings"][_mne_type] = 1.0

@@ -70,10 +70,12 @@ from annotation_io import (
     companion_provenance,
     drop_peaks_in_bad_stretches,
     full_range_banner_lines,
+    raw_row_banner_lines,
+    raw_row_size_exclusions,
     single_row_mark_lines,
     unknown_label_lines,
 )
-from channel_config import COMPANION_CHANNELS, is_present, with_companions
+from channel_config import COMPANION_CHANNELS, is_present, raw_rows_for, with_companions
 from channel_config import GUIDE_CHANNELS, REFERENCE_CHANNELS
 from physio_io import build_raw, clamp_display_rows, compute_scalings
 from session_summary_gui import edit_record
@@ -655,7 +657,9 @@ def run_stage_c(df, sfreq, channel_configs, out_dir, file_stem, source_file,
             outputs_b = {comp_key: {"mode": "segment", "bad_segments": [],
                                     "status": (outputs_b.get(parent) or {}).get("status")}, **outputs_b}
     reviewed_keys = [k for k, cfg in channel_configs.items() if cfg["annotation_mode"] in ("point", "segment")]
-    current_provenance = companion_provenance(channel_provenance(tsv_path, sidecar, reviewed_keys, len(df)))
+    raw_columns = {parent: raw_key for raw_key, parent in raw_rows_for(channel_configs).items()}
+    current_provenance = companion_provenance(channel_provenance(tsv_path, sidecar, reviewed_keys, len(df),
+                                                                 raw_columns=raw_columns))
     check_saved_provenance(outputs_a, current_provenance, channel_configs, who=f"Reviewer {label_a}'s")
     check_saved_provenance(outputs_b, current_provenance, channel_configs, who=f"Reviewer {label_b}'s")
     # A PPG review with no provenance was made before 2026-09-26 on the
@@ -674,7 +678,8 @@ def run_stage_c(df, sfreq, channel_configs, out_dir, file_stem, source_file,
         df, channel_configs, sfreq, outputs_a, outputs_b, label_a, label_b, tolerance_samples, ppg_guide=ppg_guide,
         sidecar=sidecar, ecg_ppg_guide=ecg_ppg_guide,
     )
-    scalings = compute_scalings(df, full_channel_configs)
+    scalings = compute_scalings(df, full_channel_configs,
+                                exclude=raw_row_size_exclusions(full_channel_configs, sidecar, len(df)))
     clamp_display_rows(raw, full_channel_configs, scalings)
     reference_channels_shown = [k for k in REFERENCE_CHANNELS if k in full_channel_configs]
     labels = ", ".join(cfg["label"] for cfg in channel_configs.values())
@@ -694,7 +699,7 @@ def run_stage_c(df, sfreq, channel_configs, out_dir, file_stem, source_file,
     print(f"   MNE per label) -- delete any you don't believe; add anything neither caught.")
     for line in guide_banner_lines(channel_configs, df, ppg_guide, sidecar, ecg_ppg_guide):
         print(f" - {line}")
-    for line in full_range_banner_lines(full_channel_configs):
+    for line in full_range_banner_lines(full_channel_configs) + raw_row_banner_lines(full_channel_configs, sidecar):
         print(f" - {line}")
     for comp_key, comp_cfg in COMPANION_CHANNELS.items():
         if comp_key in channel_configs:

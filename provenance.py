@@ -57,20 +57,30 @@ def column_sha256(tsv_gz_path, columns, wanted=None):
     return {c: h.hexdigest() for c, h in hashes.items()}
 
 
-def channel_provenance(tsv_gz_path, sidecar, channel_keys, n_samples):
+def channel_provenance(tsv_gz_path, sidecar, channel_keys, n_samples, raw_columns=None):
     """
     {channel: provenance dict} for the reviewed channels present in the
     sidecar's Columns. Returns {} for synthetic data (no file) and leaves
     signal_sha256 None for a channel the sidecar doesn't list.
+
+    raw_columns ({channel: column}): a channel judged on its raw row
+    (channel_config.RAW_ROWS: rsp on rsp_raw; HLU, 2026-11-08) also records
+    that column, as raw_column and raw_signal_sha256 (same definition), so a
+    reopened review stops if the row the RA judged on has changed.
     """
     if not tsv_gz_path or not sidecar:
         return {}
     columns = sidecar.get("Columns") or []
     commit = (sidecar.get("Provenance") or {}).get("PipelineCommit")
-    hashes = column_sha256(tsv_gz_path, columns, wanted=[k for k in channel_keys if k in columns])
-    return {k: {"number_of_samples": int(n_samples), "pipeline_commit": commit, "signal_sha256": hashes.get(k),
-                "signal_sha256_def": HASH_DEFINITION}
-            for k in channel_keys}
+    raw_columns = {k: c for k, c in (raw_columns or {}).items() if k in channel_keys and c in columns}
+    hashes = column_sha256(tsv_gz_path, columns,
+                           wanted=[k for k in channel_keys if k in columns] + list(raw_columns.values()))
+    out = {k: {"number_of_samples": int(n_samples), "pipeline_commit": commit, "signal_sha256": hashes.get(k),
+               "signal_sha256_def": HASH_DEFINITION}
+           for k in channel_keys}
+    for k, column in raw_columns.items():
+        out[k].update(raw_column=column, raw_signal_sha256=hashes.get(column))
+    return out
 
 
 def new_pipeline_ppg(sidecar):
@@ -122,4 +132,10 @@ def provenance_mismatch(saved_provenance, current_provenance):
     saved_hash, current_hash = saved_provenance.get("signal_sha256"), current_provenance.get("signal_sha256")
     if saved_hash and current_hash and saved_hash != current_hash:
         return "the channel's signal values have changed since the review was saved (the file was reprocessed)"
+    # The raw row the RA judged on (channel_provenance raw_columns). A review saved
+    # without it, or a session that doesn't show it, isn't checked here.
+    saved_raw, current_raw = saved_provenance.get("raw_signal_sha256"), current_provenance.get("raw_signal_sha256")
+    if saved_raw and current_raw and saved_raw != current_raw:
+        return (f"the {current_provenance.get('raw_column')} column's values have changed since the review was saved "
+                f"(the file was reprocessed)")
     return None

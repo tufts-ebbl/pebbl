@@ -41,6 +41,10 @@ Read by `physio_io.load_physio_tsv`.
 - `event`, if present, is a whole-number code per sample, shown read-only
   under the reviewed signal (section 4). A missing value there is a gap: no
   marker, and a marker where a code resumes.
+- `rsp_raw`, if present, is the breathing belt as recorded (no breathing
+  filter), in V. A study whose profile lists it (`raw_rows`, section 10) shows
+  it in place of `rsp` in RSP reviews (section 4); otherwise it is read but
+  not used.
 
 ## 2. Input: the sidecar, `*_physio.json`
 
@@ -123,6 +127,7 @@ hold bad stretches.
 | `bad_ppg` | segment | | MachineQC's `ppg` entry | companion of `ppg`, same rule |
 | `event` | (read-only) | code | | shown under the reviewed signal; never saved |
 | `emg_cor_full` | (read-only) | `emg_cor`'s | | `emg_cor`'s column at full range, right under it whenever COR is reviewed; never saved (`channel_config.FULL_RANGE_CHANNELS`) |
+| `rsp_raw` | (raw row) | V | | the `rsp_raw` column, shown **in place of** `rsp` when the study profile's `raw_rows` lists it; marks drawn on it are `bad_rsp` and save under `rsp`; its size leaves out RSP's machine stretches for `rail` and `swing`, and it is cut at 2.5 times that size (`channel_config.RAW_ROWS`) |
 
 - **Guide rows** (shown, never saved): PPG under SBP and DBP, EDA under RSP,
   RSP under EDA; PPG under ECG only when asked for (`--ecg-ppg-guide`).
@@ -159,9 +164,9 @@ ASCII (non-ASCII characters are escaped, e.g. `µS`).
 | `bad_segments` | segment | sorted `[start, end)` pairs (overlaps are not merged) |
 | `status` | all reviewed this session, companions included | `"complete"` or `"in_progress"` |
 | `reviewed_span` | all | `[0, N]`: the whole file |
-| `value_range` | segment channels with data | `{min, mean, max, unit}` of the signal |
-| `seed` | segment channels pre-filled from MachineQC | `{source: "MachineQC", rule, segments, pipeline_commit[, by_reason]}`: what the reviewer started from |
-| `provenance` | when the recording has a sidecar | `{number_of_samples, pipeline_commit, signal_sha256, signal_sha256_def}`; companions add `column` (their parent's column) |
+| `value_range` | segment channels with data | `{min, mean, max, unit}` of the signal on screen (for RSP shown as `rsp_raw`, of `rsp_raw`) |
+| `seed` | segment channels pre-filled from MachineQC | `{source: "MachineQC", rule, segments, pipeline_commit[, by_reason][, not_shown]}`: what the reviewer started from; `not_shown` (`{reason: [[start, end], ...]}`) holds the machine stretches the profile's `hidden_machine_reasons` kept off the screen, which `segments` and `by_reason` then leave out |
+| `provenance` | when the recording has a sidecar | `{number_of_samples, pipeline_commit, signal_sha256, signal_sha256_def}`; companions add `column` (their parent's column); a channel shown as its raw row adds `raw_column` (e.g. `"rsp_raw"`) and `raw_signal_sha256` (that column's hash, same definition) |
 | `guide_shown` | ECG, SBP, DBP, RSP, EDA | true if the guide row was on screen in any saved session |
 | `inverted` | ECG, only when true | the ECG was reviewed flipped (section 10) |
 | `edit_history` | all | one record per saved session, below |
@@ -173,7 +178,8 @@ ASCII (non-ASCII characters are escaped, e.g. `µS`).
   `"physioprocess-column-sha256-v1"`, shared with physioProcess
   (`provenance.column_sha256`). On reopening a review, a different sample
   count or hash stops the session, so marks are never applied to a changed
-  signal.
+  signal. `raw_signal_sha256`, when saved, is checked the same way: the row the
+  reviewer judged on can't change underneath their marks either.
 - **`edit_history` records:** `saved_at`, `initials`, `started_from` (what
   the session began from: `"saved review"`, `"MachineQC"`, the ECG seed's
   source, a `"<column> column"`, or `"blank"`), and the changes: for point
@@ -318,6 +324,8 @@ Optional settings (the default, PEBBL's built-in value, in brackets):
 | `ecg_inversion_option` | the form offers "Flip the ECG (recorded upside down)", `--ecg-inverted` (`false`) |
 | `ecg_seed_snap_ms` | how far Step 1 moves each template-found R peak to the highest point, 0-200 ms; 0 leaves it where the template alignment put it (`15`; 50 until 2026-10-31) |
 | `keep_machine_stretches` | bad-stretch channels whose MachineQC stretches the study's analysis uses whatever the RA marks, e.g. `["emg_cor"]`: the opening text and the over-90% warning say to leave them and only add, and deleting or shortening one draws a check line before saving (none) |
+| `raw_rows` | raw rows to show in place of their channel, e.g. `["rsp_raw"]` (section 4); a review of that channel on a file without the column (or with it all NaN) stops (none) |
+| `hidden_machine_reasons` | MachineQC reasons, by channel, whose stretches the study's analysis applies from the sidecar itself, e.g. `{ rsp = ["filter_edge"] }`: they aren't pre-filled, so RAs can't remove them; the opening text says how many were left off, and the saved `seed` records them as `not_shown`. Applied only when the reasons' union is exactly the channel's `BadSegments`; otherwise every stretch is shown (none) |
 | `[event_labels]` | names shown beside event codes in the viewer, e.g. `50 = "baseline"` (numbers only) |
 
 **Flipping the ECG.** With `--ecg-inverted`, PEBBL negates the ECG in memory
