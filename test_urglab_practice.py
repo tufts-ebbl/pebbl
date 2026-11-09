@@ -19,6 +19,22 @@ approved 2026-11-08 with its addendum A1-A8). Built in stages; this suite grows 
      channel can have a stricter real-event limit (COR frowns: 10%).
   5. The command-line scorer reads the participant from the file name, and
      the session's practice report names the participant.
+  6. make --study-profile writes urglab's two participants and key (version
+     2, seed 20261108). The signals are exactly the ones physiopipe computed
+     its marks for (practice_urglab_machine_qc.json); make refuses another
+     seed, a missing JSON, or signals that differ, and writes nothing then.
+  7. The files have physiopipe's reference sidecar's shape and the study's
+     own texts, and carry physiopipe's computed marks unchanged.
+  8. Controls: each key r/R is the top of its beat; the breathing cases are
+     on the belt; PEBBL hides exactly filter_edge; the display cut still
+     shows the cases.
+  9. A perfect review passes both participants.
+ 10. The untouched marks, saved through the real Step 2 code with urglab's
+     settings, fail where the RA has work to do (and pass EDA, where the
+     computer's marks are right).
+ 11. Each mistake the plan names fails; a missed single small pop, the whole
+     ECG lead-off marked, and the drift after a belt step don't.
+ 12. A Step 1 + Step 2 practice session for 991 through physio_review.
 
 Run with: annotate_env\\Scripts\\python.exe test_urglab_practice.py
 """
@@ -276,11 +292,36 @@ def check_generated(tmp):
 
     print("6. make --study-profile <urglab's> writes sub-990 and sub-991 (run 1) and urglab's encoded key...")
     with contextlib.redirect_stdout(io.StringIO()):
-        assert pc.main(["make", "--out-dir", practice, "--seed", "2024", "--study-profile", toml,
+        assert pc.main(["make", "--out-dir", practice, "--study-profile", toml,
                         "--key-copy", os.path.join(tmp, "staff", "urglab_key.json")]) == 0
     key = pc.load_key(pc.key_path_for(practice))
     assert key == pc.load_key(os.path.join(tmp, "staff", "urglab_key.json"))
-    assert key["version"] == pc.KEY_VERSIONS["urglab"] == 1 and pc.key_study(key) == "urglab"
+    assert key["version"] == pc.KEY_VERSIONS["urglab"] == 2 and pc.key_study(key) == "urglab"
+    assert key["seed"] == pu.SEED == 20261108, "version 2: one seed, because the marks are physiopipe's for it"
+    computed = pu.load_machine_qc(pu.MACHINE_QC_FILE)
+    for subject in pu.SUBJECTS:  # the signals are exactly the ones physiopipe computed its marks for
+        df, _cases = pu.build_signals(subject)
+        assert hashlib.sha256(pu.tsv_bytes(df)).hexdigest() == computed["subjects"][subject]["tsv_unzipped_sha256"], \
+            (subject, "signals changed: physiopipe must recompute (practice_urglab.draft_for_physiopipe)")
+    refused = os.path.join(tmp, "refused")
+    real_build = pu.build_signals
+    for patches, why in (
+            ([], "always uses seed"),  # any other seed
+            ([patch.object(pu, "MACHINE_QC_FILE", os.path.join(tmp, "nowhere.json"))], "is missing"),
+            ([patch.object(pu, "build_signals", side_effect=lambda subject, seed=pu.SEED: (
+                lambda df_cases: (df_cases[0].assign(ecg=df_cases[0]["ecg"] + 1e-6), df_cases[1]))(
+                real_build(subject, seed)))], "aren't the ones physiopipe computed")):
+        extra = ["--seed", "2024"] if why == "always uses seed" else []
+        with contextlib.ExitStack() as stack:
+            for p in patches:
+                stack.enter_context(p)
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    pc.main(["make", "--out-dir", refused, "--study-profile", toml] + extra)
+                raise AssertionError(f"make should refuse: {why}")
+            except SystemExit as e:
+                assert why in str(e), e
+        assert not os.path.exists(pc.key_path_for(refused)), "nothing written when refused"
     assert {s: e["ecg_inverted"] for s, e in key["subjects"].items()} == {"990": False, "991": True}
     assert key["criteria"]["trap_max_coverage_by_channel"] == {"emg_cor": 0.10}
     assert key["descriptions_sha256"] == pu.description_hashes()
@@ -327,6 +368,8 @@ def check_generated(tmp):
                 assert all(isinstance(a, int) and isinstance(b, int) and 0 <= a < b <= len(df) for a, b in v), (ch, v)
                 assert all(v[i][1] < v[i + 1][0] for i in range(len(v) - 1)), ("sorted, disjoint", ch, v)
             assert mine["BadSegments"] == pu._merge(spans), (ch, "BadSegments is the union")
+        assert side["MachineQC"]["Channels"] == computed["subjects"][subject]["MachineQC"]["Channels"], \
+            (subject, "the computer's marks are physiopipe's, unchanged")
         assert not side["MachineQC"]["Channels"]["rsp"]["SegmentsByReason"]["snr"]
         assert not side["MachineQC"]["Channels"]["rsp"]["SegmentsByReason"]["ecg_unconfirmed"]
         prov = side["Provenance"]
@@ -409,12 +452,13 @@ def check_generated(tmp):
             assert results[ch] is False, (subject, ch, text)
         if subject == "990":
             assert results["eda"] is True, "the computer's EDA marks are right; real responses are left"
-            assert "FIX  no breathing (the belt shows only fine noise)" in text and "30% marked bad" in text, text
+            dead_line = next(line for line in lines if "no breathing (the belt shows only fine noise)" in line)
+            assert dead_line.startswith("  FIX") and dead_line.endswith("20% marked bad"), dead_line  # physiopipe's flat
             assert "FIX  a large slow drop at a task event" in text
             assert "OK   a sudden 4-V drop and return at a task event" in text, "the machine's swing is right"
             assert "MISS  a single small electrode pop" in text and "FIX  a train of electrode pops" in text
-            assert "OK   the computer's mark on a frown that reached the sensor limit" in text
-            assert "FIX  hand movement" in text and "OK   the sensor hit its limit" in text
+            assert "FIX  hand movement" in text and "sensor hit its limit" not in text, "dropped in version 2"
+            assert "OK   electrode lift" in text and "OK   stuck sensor" in text, "physiopipe's floor and flat"
         else:
             assert "FIX  Flip the ECG: this ECG is upside down" in text, text
             assert "FIX  a held breath (no breathing)" in text and "OK   a 40-ms pop to the belt's limit" in text
@@ -442,10 +486,11 @@ def check_generated(tmp):
     frown = next(t for t in cor["traps"] if t["type"].startswith("a long held frown"))
     assert not score("990", segs(copy_review(p0), "emg_cor", p0["channels"]["emg_cor"]["bad_segments"]
                                  + [[frown["start"], frown["end"]]]), ["emg_cor"])[0], "a frown marked bad"
-    keep = cor["must_keep"][0]
-    shortened = [s for s in p0["channels"]["emg_cor"]["bad_segments"] if s != [keep["start"], keep["end"]]]
-    shortened.append([keep["start"], (keep["start"] + keep["end"]) // 2])
-    assert not score("990", segs(copy_review(p0), "emg_cor", shortened), ["emg_cor"])[0], "machine COR shortened"
+    keep = rk1["channels"]["emg_cor"]["must_keep"][0]  # 991's dead channel
+    assert [keep["start"], keep["end"]] == [0, len(files["991"][1])] and "flat_record" in keep["type"]
+    shortened = [[keep["start"], (keep["start"] + keep["end"]) // 2]]
+    assert not score("991", segs(copy_review(p1), "emg_cor", shortened), ["emg_cor"])[0], "machine COR shortened"
+    assert not cor.get("must_keep"), "990's COR has no computer marks in version 2"
     single = next(a for a in cor["artifacts"] if a.get("required") is False)
     without = [s for s in p0["channels"]["emg_cor"]["bad_segments"] if s != [single["start"], single["end"]]]
     ok, _, lines = score("990", segs(copy_review(p0), "emg_cor", without), ["emg_cor"])
@@ -463,6 +508,9 @@ def check_generated(tmp):
     dead = next(a for a in rsp0["artifacts"] if a["type"].startswith("no breathing"))
     only_machine = [s for s in p0["channels"]["rsp"]["bad_segments"] if s != [dead["start"], dead["end"]]] + machine_flat
     assert not score("990", segs(copy_review(p0), "rsp", only_machine), ["rsp"])[0], "the partial flat alone"
+    lead_off = p0["channels"]["bad_ecg"]["bad_segments"] + rk0["channels"]["bad_ecg"]["neutral"]
+    assert score("990", segs(copy_review(p0), "bad_ecg", lead_off), ["bad_ecg"])[0], \
+        "marking the whole lead-off, not only the computer's middle, is fine"
     drift = next(span for span in rsp0["neutral"] if span[0] > 20000 and span[1] < 160000)
     drifted = p0["channels"]["rsp"]["bad_segments"] + [drift]
     assert score("990", segs(copy_review(p0), "rsp", drifted), ["rsp"])[0], "the drift back after a step is neutral"

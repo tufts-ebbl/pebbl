@@ -1397,23 +1397,40 @@ and `test_urglab_practice.py` item 1 keeps it byte-for-byte the same.
   SHA-256, so a new text means a new urglab key version.
   `Provenance.SourceFiles` puts each file 5 s inside its imagined recording,
   so RSP's 20-s `filter_edge` is the tsv's first and last 15 s.
-- **The computer's marks are hand-written to imitate physiopipe's rules,**
-  including what they really miss:
-  - the breathing `flat` covers only the middle of a dead belt;
-  - `rail` guards 5 s of clear breathing around the limit;
-  - a slow drop and a held breath get no mark;
-  - `snr` and `ecg_unconfirmed` stay empty, since a 180-s file can't trigger
-    them.
-  
-  Physiopipe checks them against its own rules before HLU's pilot (A7):
-  breathing sample by sample at 1000 Hz, the other channels in writing.
+- **The computer's marks are physiopipe's own (key version 2, 2026-11-08).**
+  - **Why:** version 1 imitated physiopipe's rules by hand. Physiopipe's
+    check (A7) found five marks its rules would never make and one breathing
+    `flat` in a different place.
+  - **How:** physiopipe ran its own checks on exactly these signals, and its
+    JSON is `practice_urglab_machine_qc.json`, unchanged.
+  - **Consequences:**
+    - urglab's practice always uses one seed (`practice_urglab.SEED`,
+      20261108);
+    - `make` refuses to write anything if the signals it builds aren't the
+      ones physiopipe computed for (the JSON's `tsv_unzipped_sha256`), for
+      example after a library update.
+  - **After any change to the signals:**
+    1. run `practice_urglab.draft_for_physiopipe(<folder>)`, which writes the
+       signals with empty MachineQC;
+    2. physiopipe recomputes;
+    3. save its JSON in place of the old one;
+    4. bump urglab's key version.
+  - **What the marks really do:**
+    - the breathing `flat` covers only the middle of a dead belt;
+    - `rail` guards 5 s of clear breathing around the limit;
+    - a slow drop and a held breath get no mark;
+    - the ECG lead-off's `flat` covers only its middle (the cleaning rings at
+      the ends);
+    - the EDA lift gets `floor`, with 2 s of guard each side;
+    - `snr` and `ecg_unconfirmed` stay empty in a 180-s file.
 - **One key version per study:** `practice_certification.KEY_VERSIONS =
-  {"sdi": 7, "urglab": 1}`. sdi's key keeps its old shape (no `study`
+  {"sdi": 7, "urglab": 2}`. sdi's key keeps its old shape (no `study`
   field); urglab's has `"study": "urglab"` and `"subjects": {"990": ...,
   "991": ...}`.
 - **Scoring additions, used only by urglab's key:**
   - `neutral` stretches count either way: the hidden `filter_edge`, the
-    drift back after a belt step, and the PPG `rail` guard;
+    drift back after a belt step, the rest of the ECG lead-off around the
+    computer's mark, and the EDA `floor` guard;
   - `must_keep` machine stretches fail if removed or shortened (COR, which
     pass 2 always applies);
   - `trap_max_coverage_by_channel` holds COR frowns to 10%;
@@ -1422,13 +1439,13 @@ and `test_urglab_practice.py` item 1 keeps it byte-for-byte the same.
 
 | | Fix or mark | Keep the computer's mark | Leave alone |
 |---|---|---|---|
-| ECG 990 | missed beats; seed marks on the S, the rebound after it and T waves (some T waves are taller than the r); 4 s of noise (`bad_ecg`) | lead off (`flat`) | the small r; a premature beat |
-| ECG 991 | tick Flip; missed beats; marks on T waves; 4 s of noise | lead off (`flat`) | |
-| PPG 990 | missed pulses, marks on the dicrotic wave and a slope; a hand movement and the weak pulse after the premature beat (`bad_ppg`) | the sensor at its limit (`rail`; its 3-s guard is neutral) | pulses of varying height |
+| ECG 990 | missed beats; seed marks on the S, the rebound after it and T waves (some T waves are taller than the r); 4 s of noise (`bad_ecg`) | lead off, 8 s constant (`flat` on its middle) | the small r; a premature beat |
+| ECG 991 | tick Flip; missed beats; marks on T waves; 4 s of noise | lead off, 8 s constant (`flat` on its middle) | |
+| PPG 990 | missed pulses, marks on the dicrotic wave and a slope; a hand movement and the weak pulse after the premature beat (`bad_ppg`) | | pulses of varying height |
 | RSP 990 (on `rsp_raw`) | extend the partial `flat` over a 40-s noise-only dead belt; mark a slow 3.5-V drop at a task event | a fast 4-V drop and return at a task event (`swing`) | a sigh |
 | RSP 991 | mark an 8-s held breath; trim `rail` to a 40-ms pop and to the belt held at its limit then jumping | | shallow breathing |
-| EDA 990 | | an electrode lift (`kleckner`), a stuck sensor (`flat`) | 5 real responses; no brief-glitch case (A5 is open) |
-| COR 990 | a pop train; a regular repeating pattern; a perfectly smooth stretch right after a spike; a single pop (a MISS if left) | a frown that reached the sensor limit (`clipped`, `clip_guard`) | frowns (10% at most), ordinary bursts, a quiet stretch that fades in gradually |
+| EDA 990 | | an electrode lift (`floor`; its 2-s guard is neutral), a stuck sensor constant over 124-136 s (`flat` on the file-aligned window 125-135 s) | 5 real responses; no brief-glitch case (A5 is open) |
+| COR 990 | a pop train; a regular repeating pattern; a perfectly smooth stretch right after a spike; a single pop (a MISS if left) | | frowns (10% at most), ordinary bursts, a quiet stretch that fades in gradually |
 | COR 991 | | the whole run, a dead channel (`flat_record`) | |
 
 991's PPG and EDA are clean: they're scored but not part of certification.
@@ -1877,6 +1894,9 @@ and real-data-gets-its-own-scale) and `test_real_data.py`/`test_column_subsets.p
   rS beats, sub-991 upside down; run 1) in physiopipe's format, and their
   answer key; made through `practice_certification.py make --study-profile`
   (see "urglab's practice" above).
+- `practice_urglab_machine_qc.json` — physiopipe's own computer marks for
+  those signals (its JSON, unchanged; physiopipe b21f82b, urglab profile
+  21078f4f17b8), with each file's SHA-256, which `make` checks.
 - `practice_report_gui.py` — the practice score window shown after each
   saved practice review, with its "Compare with the answer key" button.
 - `test_urglab_practice.py` — urglab's practice:
