@@ -83,7 +83,7 @@ KEY_VERSION = 7  # 5 (2026-10-04): neurokit2 signals, runs 1 and 2, outcome scor
 # One key version per study (HLU, 2026-11-08: "a change to a study's practice data bumps *that study's* key
 # version"). An sdi key has no "study" field, so its bytes don't change; urglab keys (practice_urglab.py) say
 # "study": "urglab" and hold several practice participants under "subjects".
-KEY_VERSIONS = {"sdi": KEY_VERSION, "urglab": 1}
+KEY_VERSIONS = {"sdi": KEY_VERSION, "urglab": 2}  # urglab 2 (2026-11-08, A7): physiopipe's own computer marks
 KEY_FILENAME = "practice_key.pebbl"
 KEY_HEADER = "PEBBL practice answer key (encoded; lab staff: practice_certification.py score)\n"
 

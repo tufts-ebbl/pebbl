@@ -22,23 +22,27 @@ The recordings are never participant data: every signal is built here. COR
 reuses the shapes in fixtures/cor_planted_75-140s.npz (physiopipe's planted,
 synthetic corrugator; HLU, 2026-11-01: "Yes").
 
-The computer's marks (each sidecar's MachineQC) are written here to imitate
-physiopipe's rules (MACHINE_RULES below), including what those rules really
-miss: the breathing `flat` mark covers only the middle of a dead belt, `rail`
-guards 5 s of clear breathing around a moment at the limit, and the slow drop
-and the held breath get no mark at all. physiopipe checks them against its
-own rules before HLU's pilot (addendum A7). `snr` and `ecg_unconfirmed` are
-always empty: a 180-s file can't trigger them under physiopipe's rules.
+The computer's marks (each sidecar's MachineQC) are physiopipe's own (key
+version 2, after A7 found version 1's hand-written imitations wrong in five
+places): physiopipe ran its own checks on exactly these signals and its JSON
+is practice_urglab_machine_qc.json. So urglab's practice always uses one seed
+(SEED), and make() refuses to write anything if the signals it builds aren't
+the ones physiopipe computed for (their SHA-256 is in that JSON), e.g. after a
+library update. After any change to the signals: draft_for_physiopipe(),
+physiopipe recomputes, save its JSON, bump urglab's key version. What the
+marks really do: the breathing `flat` covers only the middle of a dead belt,
+`rail` guards 5 s of clear breathing around a moment at the limit, the slow
+drop and the held breath get no mark, the ECG lead-off's flat mark is its
+middle only, and `snr` and `ecg_unconfirmed` stay empty in a 180-s file.
 
 What RAs fix, keep and leave (plan answer 2, addendum A2):
   ECG   990: missed beats, starting marks on the S, the rebound after it and
         on T waves (some T waves are taller than the r), a noise burst to
         mark bad_ecg; keep the premature beat and the computer's lead-off
-        mark. 991: tick Flip; missed beats, marks on T waves, a noise burst.
+        mark (the middle of an 8-s flat stretch; the rest counts either way). 991: tick Flip; missed beats, marks on T waves, a noise burst.
   PPG   990: missed pulses, marks on the dicrotic wave and on a slope; a hand
-        movement and the weak pulse after the premature beat, both bad_ppg;
-        keep the computer's mark where the sensor hit its limit (its 3-s guard
-        is neutral, addendum A8). 991: clean (scored, not certified).
+        movement and the weak pulse after the premature beat, both bad_ppg.
+        991: clean (scored, not certified).
   RSP   (judged on rsp_raw; the hidden first and last 15 s and the drift back
         after a step are neutral, addendum A3)
         990: extend the partial `flat` over a noise-only dead belt; add a mark
@@ -46,14 +50,14 @@ What RAs fix, keep and leave (plan answer 2, addendum A2):
         drop-and-return; leave a sigh.
         991: add a mark on a held breath; trim `rail` to a 40-ms pop and to
         the belt held at its limit then jumping; leave shallow breathing.
-  EDA   990: keep the computer's marks on an electrode lift and a stuck
-        sensor; leave real responses. No brief-glitch case (addendum A5).
+  EDA   990: keep the computer's marks on an electrode lift (`floor`; its
+        2-s guard is neutral) and a stuck sensor (`flat`); leave real
+        responses. No brief-glitch case (addendum A5).
         991: real responses only (scored, not certified).
   COR   990: mark electrode pops (a train; a single small one is a miss, not
         a fail), a regular repeating pattern, and a perfectly smooth stretch
         that starts right after a spike; leave frowns (at most 10% marked),
-        ordinary bursts and a quiet stretch that fades in gradually; keep the
-        computer's mark on a frown that reached the sensor limit.
+        ordinary bursts and a quiet stretch that fades in gradually.
         991: the whole run is a dead channel (`flat_record`): keep it.
 """
 
@@ -72,6 +76,7 @@ SUBJECTS = ("990", "991")
 RUN = "1"
 TASK = "urglab"
 KEY_VERSION = pc.KEY_VERSIONS["urglab"]
+SEED = 20261108  # version 2: one seed always, because the computer's marks are physiopipe's for these signals
 FILE_MARGIN_SEC = 5.0  # each practice tsv sits 5 s inside its (imagined) recording file, as physiopipe's writer
 #                        records in Provenance.SourceFiles (physiopipe, 2026-11-08: filter_edge counts from the
 #                        recording file's ends, so RSP's 20-s filter_edge is the tsv's first and last 15 s)
@@ -200,20 +205,23 @@ CLEARED_SEC = 1.0
 # tracing->DR grid at 107, 141 and 176 s.
 PLANS = {
     "990": {
-        "ecg": {"kind": "rS", "heart_rate": 68, "pvc_at": 95.0, "flat": (140.0, 3.0), "noise": (118.0, 4.0),
+        # Version 2 (A7): the lead-off is 8 s, long enough for physiopipe's flat (it marks the middle); the stuck
+        # sensor is constant over [124, 136), so the file-aligned 10-s window [125, 135) that physiopipe's EDA
+        # flat needs stays flat after its 3-Hz low-pass (physiopipe, 2026-11-08: [125, 135) alone gets no mark).
+        "ecg": {"kind": "rS", "heart_rate": 68, "pvc_at": 95.0, "flat": (140.0, 8.0), "noise": (118.0, 4.0),
                 "missed": (22.0, 61.0, 150.0), "on_s": (35.0, 128.0), "on_rebound": (88.0,), "on_t": (50.0, 170.0)},
-        "ppg": {"movement": (70.0, 4.0), "saturated": (157.0, 1.5), "missed": (30.0, 100.0, 133.0),
-                "on_dicrotic": (45.0, 110.0), "on_slope": (125.0,)},
+        "ppg": {"movement": (70.0, 4.0), "missed": (30.0, 100.0, 133.0), "on_dicrotic": (45.0, 110.0),
+                "on_slope": (125.0,)},
         "rsp": {"dead": (25.0, 65.0), "sigh": 72.0, "fast_swing": 92.0, "slow_drop": 126.0},
-        "eda": {"scrs": (20.0, 58.0, 101.0, 146.0, 165.0), "lift": (40.0, 2.5), "stuck": (128.0, 5.0)},
+        "eda": {"scrs": (20.0, 58.0, 101.0, 146.0, 165.0), "lift": (40.0, 2.5), "stuck": (124.0, 12.0)},
         "emg_cor": {"bursts": (22.0, 140.0), "frown_long": (30.0, 8.0), "pop_single": 45.0, "quiet_fade": 52.0,
                     "frown_fixture": 62.0, "pattern": (75.0, 5.0), "pop_train": 88.0, "dead": (100.0, 6.0),
-                    "frown_clipped": (118.0, 6.0)},
+                    "frown_big": (118.0, 6.0)},
     },
     "991": {
-        "ecg": {"kind": "inverted", "heart_rate": 62, "pvc_at": None, "flat": (100.0, 2.5), "noise": (60.0, 4.0),
+        "ecg": {"kind": "inverted", "heart_rate": 62, "pvc_at": None, "flat": (100.0, 8.0), "noise": (60.0, 4.0),
                 "missed": (30.0, 90.0, 140.0), "on_s": (), "on_rebound": (), "on_t": (45.0, 120.0)},
-        "ppg": {"movement": None, "saturated": None, "missed": (), "on_dicrotic": (), "on_slope": ()},
+        "ppg": {"movement": None, "missed": (), "on_dicrotic": (), "on_slope": ()},
         "rsp": {"shallow": (25.0, 15.0), "hold": (50.0, 8.0), "limit": 107.0, "pop": 135.0},
         "eda": {"scrs": (30.0, 75.0, 120.0, 160.0), "lift": None, "stuck": None},
         "emg_cor": {"dead_channel": True},
@@ -357,12 +365,9 @@ def _build_ecg(rng, plan, n, t, beats, pvc):
     burst = rng.normal(0, 1, nhi - nlo)
     ecg[nlo:nhi] += burst / burst.std() * 0.45 + _lowpass(rng.normal(0, 1, nhi - nlo), 3.0) * 1.5
     flo, fhi = _s(plan["flat"][0]), _s(sum(plan["flat"]))
-    ecg[flo:fhi] = ecg[flo]  # lead off: dead flat (SD 0 < physiopipe's 0.001 mV)
+    ecg[flo:fhi] = ecg[flo]  # lead off: dead flat (physiopipe marks the middle, where its cleaning doesn't ring)
     true_r = sorted(p for p in true_r if not flo <= p < fhi)  # no heartbeat recorded there
-    artifacts = [
-        {"type": "heavy noise: R peaks can't be found here (mark it bad_ecg)", "start": nlo, "end": nhi},
-        {"type": "the ECG is flat (lead off): the computer's mark is right, keep it", "start": flo, "end": fhi},
-    ]
+    artifacts = [{"type": "heavy noise: R peaks can't be found here (mark it bad_ecg)", "start": nlo, "end": nhi}]
     detected = [int(p) for p in nk.ecg_peaks(ecg, sampling_rate=FS, method="nabian2018")[1]["ECG_R_Peaks"]]
     detected = [_refine(ecg, p, 2) for p in detected if not flo <= p < fhi]  # physiopipe snaps within 2 samples
     return ecg, upright, true_r, pvc_r, artifacts, detected, [flo, fhi]
@@ -383,22 +388,14 @@ def _build_ppg(rng, plan, n, t, beats, pvc):
         amp = 0.4 if i == pvc else 1.0 + 0.15 * np.sin(2 * np.pi * 0.25 * c)  # breathing varies the height
         shapes.append((c, [(0.0, 0.07, 0.5 * amp), (0.30, 0.06, 0.14 * amp)]))
     ppg = _waves(t, n, shapes) + 0.05 * np.sin(2 * np.pi * 0.1 * t) + rng.normal(0, 0.005, n)
-    artifacts, neutral, rail = [], [], []
+    artifacts = []
     if plan["movement"]:
         m0, m1 = _s(plan["movement"][0]), _s(sum(plan["movement"]))
         ppg[m0:m1] += _lowpass(rng.normal(0, 1, m1 - m0), 2.5) * 1.2 * pc._taper(m1 - m0, 0.3)
         artifacts.append({"type": "hand movement (big, irregular waves): mark it bad_ppg", "start": m0, "end": m1})
     ppg = _band(ppg, 0.5, 8.0)  # physiopipe's 'elgendi' clean
-    if plan["saturated"]:
-        s0, s1 = _s(plan["saturated"][0]), _s(sum(plan["saturated"]))
-        limit = float(ppg[s0:s1].max()) * 0.6
-        ppg[s0:s1] = np.minimum(ppg[s0:s1], limit)
-        at_limit = s0 + np.flatnonzero(ppg[s0:s1] >= limit)
-        a, b = int(at_limit[0]), int(at_limit[-1]) + 1
-        rail = _clip_span(a - _s(3.0), b + _s(3.0), n)
-        artifacts.append({"type": "the sensor hit its limit (flat tops): the computer's mark is right, keep it",
-                          "start": a, "end": b})
-        neutral += [[rail[0], a], [b, rail[1]]]  # the rail's 3-s guard: neither required nor penalized (A8)
+    # Version 1's "sensor at its limit" case is gone (A7): physiopipe's rail needs +-10 V, which no practice
+    # pulse reaches.
 
     tops = []
     for c in centres:
@@ -421,7 +418,7 @@ def _build_ppg(rng, plan, n, t, beats, pvc):
     seed = pc._seed_with_errors(ppg, tops, detected, plan["missed"], [(x, 0.30) for x in plan["on_dicrotic"]],
                                 [(x, -0.06) for x in plan["on_slope"]], [pvc_top] if pvc_top is not None else [],
                                 rng)
-    return ppg, tops, seed, artifacts, neutral, rail
+    return ppg, tops, seed, artifacts
 
 
 # --------------------------------------------------------------------------
@@ -432,14 +429,14 @@ def _build_belt(rng, plan, n, t, heart_rate):
     """
     rsp_raw: the belt as recorded. Ordinary breathing (about 15 a minute, about 1 V per breath, varying a
     little), through a first-order AC coupling with a 3-s time constant (so a lasting step drifts back to the
-    middle), clipped at the +-10 V limit, plus 1 mV of sensor noise. Returns the belt, its cases for the key,
-    and the computer's marks by reason.
+    middle), clipped at the +-10 V limit, plus 1 mV of sensor noise. Returns the belt, the breath tops (for
+    rsp_peaks), and the cases for the key.
     """
     rate = 0.25 + 0.02 * np.sin(2 * np.pi * t / 47.0) + 0.01 * _lowpass(rng.normal(0, 1, n), 0.05) / 0.05
     rate = np.clip(rate, 0.18, 0.33)
     gate = np.ones(n)
     freeze = np.zeros(n, dtype=bool)
-    artifacts, traps, neutral, reasons = [], [], [], {r: [] for r in REASONS["rsp"]}
+    artifacts, traps, neutral = [], [], []
 
     phase0 = 2 * np.pi * np.cumsum(rate) / FS
     if "hold" in plan:  # breathing stops after an in-breath (sin = 1), then picks up where it left off
@@ -465,12 +462,6 @@ def _build_belt(rng, plan, n, t, heart_rate):
         gate[a:b] = 0.0
         artifacts.append({"type": "no breathing (the belt shows only fine noise): mark it from where the "
                                   "breathing stops to where it returns", "start": a, "end": b})
-        # physiopipe's flat (2-s windows, counted from the file's start, so odd tsv seconds) misses about 10 s at
-        # the start and 16 s at the end of a noise-only stretch (its synthetic file: 25-75 s -> 35-59 s).
-        f0 = int(np.ceil((a / FS + 10.0 - 1) / 2) * 2 + 1)
-        f1 = int(np.floor((b / FS - 16.0 - 1) / 2) * 2 + 1)
-        if f1 > f0:
-            reasons["flat"].append([_s(f0), _s(f1)])
     if "sigh" in plan:
         a, b = cycle_at(plan["sigh"])
         breathing[a:b] *= 2.5
@@ -494,13 +485,9 @@ def _build_belt(rng, plan, n, t, heart_rate):
         if b < n:
             steps[b:b + r] += height * (0.5 + 0.5 * np.cos(np.linspace(0, np.pi, r)))
 
-    def swing_mark(a, b):
-        reasons["swing"].append(_clip_span(a - _s(1.0), b + _s(1.0), n))
-
     if "fast_swing" in plan:  # a 4-V drop that returns 0.7 s later, at a phase change
         a, b = _s(plan["fast_swing"]), _s(plan["fast_swing"] + 0.7)
         edge(a, b, -4.0, 0.03)
-        swing_mark(a, b)
         artifacts.append({"type": "a sudden 4-V drop and return at a task event: keep the computer's mark",
                           "start": a, "end": b})
     if "slow_drop" in plan:  # 3.5 V over 0.8 s, too slow for the swing rule; it stays, so the belt drifts back
@@ -513,31 +500,23 @@ def _build_belt(rng, plan, n, t, heart_rate):
     if "limit" in plan:  # the belt held at its limit about 1.3 s, then a jump past zero
         a, b = _s(plan["limit"]), _s(plan["limit"] + 1.3)
         edge(a, b, -16.0, 0.05)
-        swing_mark(a, b)
         artifacts.append({"type": "the belt held at its limit, then a jump: keep the mark there, remove it "
                                   "over the clear breathing around it", "start": a, "end": b + _s(0.8)})
         neutral.append([b + _s(0.8), min(n, b + _s(0.8) + _s(DRIFT_SEC))])
     if "pop" in plan:  # one 40-ms pop to the limit amid ordinary breathing, not at a task event
         a, b = _s(plan["pop"]), _s(plan["pop"] + 0.04)
         steps[a:b] += -14.0
-        swing_mark(a, b)
         artifacts.append({"type": "a 40-ms pop to the belt's limit: keep the mark there, remove it over the "
                                   "clear breathing around it", "start": a, "end": b})
 
     alpha = BELT_TAU_SEC / (BELT_TAU_SEC + 1.0 / FS)
     coupled = lfilter([alpha, -alpha], [1.0, -alpha], tension + steps - (tension + steps)[0])
     belt = np.clip(coupled, -BELT_LIMIT_V, BELT_LIMIT_V) + rng.normal(0, 0.001, n)
-    at_limit = np.flatnonzero(np.abs(coupled) >= BELT_LIMIT_V)
-    if len(at_limit):  # rail: within 5 s of any sample at the limit
-        runs = np.split(at_limit, np.flatnonzero(np.diff(at_limit) > 1) + 1)
-        reasons["rail"] = _merge([_clip_span(r[0] - _s(5.0), r[-1] + 1 + _s(5.0), n) for r in runs])
     edge_len = _s(RSP_EDGE_SEC)
-    reasons["filter_edge"] = [[0, edge_len], [n - edge_len, n]]
-    neutral += [[0, edge_len], [n - edge_len, n]]  # hidden from RAs (urglab hidden_machine_reasons)
-    reasons = {r: _merge(spans) for r, spans in reasons.items()}
+    neutral += [[0, edge_len], [n - edge_len, n]]  # filter_edge: hidden from RAs (urglab hidden_machine_reasons)
     breath_tops = np.flatnonzero(np.diff(np.floor((phase - np.pi / 2) / (2 * np.pi))) > 0) + 1
     breath_tops = [int(p) for p in breath_tops if gate[p] > 0.5 and not freeze[p]]
-    return belt, breath_tops, artifacts, traps, neutral, reasons
+    return belt, breath_tops, artifacts, traps, neutral
 
 
 # --------------------------------------------------------------------------
@@ -546,7 +525,7 @@ def _build_belt(rng, plan, n, t, heart_rate):
 
 def _build_eda(rng, plan, n, t):
     eda = 6.0 + 0.3 * np.sin(2 * np.pi * t / 150) + 0.003 * _lowpass(rng.normal(0, 1, n), 1.0) / 0.03
-    traps, artifacts, reasons = [], [], {r: [] for r in REASONS["eda"]}
+    traps, artifacts = [], []
     scr_tops = []
     for onset in plan["scrs"]:
         amp = rng.uniform(0.3, 0.7)
@@ -559,16 +538,13 @@ def _build_eda(rng, plan, n, t):
     if plan["lift"]:  # an electrode lift: the reading drops below the valid range, then comes back
         l0, l1 = _s(plan["lift"][0]), _s(sum(plan["lift"]))
         eda[l0:l1] = 0.02 + rng.normal(0, 0.001, l1 - l0)
-        reasons["kleckner"].append([l0, l1])
         artifacts.append({"type": "electrode lift (out of range): the computer's mark is right, keep it",
                           "start": l0, "end": l1})
     if plan["stuck"]:
         f0, f1 = _s(plan["stuck"][0]), _s(sum(plan["stuck"]))
         eda[f0:f1] = eda[f0]
-        reasons["flat"].append([f0, f1])
-        artifacts.append({"type": "stuck sensor (flat line): the computer's mark is right, keep it",
-                          "start": f0, "end": f1})
-    return eda, scr_tops, artifacts, traps, reasons
+        artifacts.append({"type": "stuck sensor (flat line): keep the computer's mark", "start": f0, "end": f1})
+    return eda, scr_tops, artifacts, traps
 
 
 def _paste(x, start, segment, fade=20):
@@ -582,12 +558,9 @@ def _paste(x, start, segment, fade=20):
 
 
 def _build_cor(rng, plan, n, t):
-    """(emg_cor in mV, artifacts, traps, kept machine stretches, reasons) for one participant."""
-    reasons = {r: [] for r in REASONS["emg_cor"]}
+    """(emg_cor in mV, artifacts, traps) for one participant; 991's dead channel has neither."""
     if plan.get("dead_channel"):  # no electrodes attached: the whole run is a dead channel
-        cor = rng.normal(0, 1e-5, n)
-        reasons["flat_record"] = [[0, n]]
-        return cor, [], [], [{"type": "a dead channel (the whole run)", "start": 0, "end": n}], reasons
+        return rng.normal(0, 1e-5, n), [], []
 
     z = np.load(COR_FIXTURE)
     fx, f_start = z["emg_cor"].astype(float), float(z["start_s"])
@@ -600,7 +573,7 @@ def _build_cor(rng, plan, n, t):
 
     texture = _band(rng.normal(0, 1, n), 20.0, 450.0, order=4)
     cor = texture / texture.std() * 0.003
-    artifacts, traps, keep = [], [], []
+    artifacts, traps = [], []
 
     def frown(start, length, size):
         a, b = _s(start), _s(start + length)
@@ -649,23 +622,11 @@ def _build_cor(rng, plan, n, t):
     cor[d1:d1 + 3] += np.array([-0.12, 0.10, -0.03])
     artifacts.append({"type": "a perfectly smooth stretch right after a spike (to the next sudden change)",
                       "start": d0, "end": d1})
-    c0, c1 = frown(*plan["frown_clipped"], 0.06)
-    mid, half = (c0 + c1) // 2, _s(0.5)  # its strongest half second reaches the sensor limit
-    peak = _band(rng.normal(0, 1, 2 * half), 20.0, 450.0, order=4)
-    cor[mid - half:mid + half] += peak / peak.std() * 0.3 * np.hanning(2 * half)
-    limit = 0.5
-    clipped = c0 + np.flatnonzero(np.abs(cor[c0:c1]) >= limit)
-    cor[c0:c1] = np.clip(cor[c0:c1], -limit, limit)
-    k0, k1 = int(clipped[0]), int(clipped[-1]) + 1
-    reasons["clipped"] = [[k0, k1]]
-    reasons["clip_guard"] = [_clip_span(k0 - _s(1.5), k1 + _s(1.5), n)]
-    guard = reasons["clip_guard"][0]
-    keep.append({"type": "a frown that reached the sensor limit", "start": guard[0], "end": guard[1]})
-    if guard[0] > c0:
-        traps.append({"type": "the rest of that frown: real, leave it", "start": c0, "end": guard[0]})
-    if guard[1] < c1:
-        traps.append({"type": "the rest of that frown: real, leave it", "start": guard[1], "end": c1})
-    return cor, artifacts, traps, keep, reasons
+    # Version 1's frown clipped at 0.5 mV is gone (A7: physiopipe's COR limit is 2 mV, which frowns don't
+    # reach); the frown stays, as a frown to leave.
+    a, b = frown(*plan["frown_big"], 0.06)
+    traps.append({"type": "a big held frown: real, leave it", "start": a, "end": b})
+    return cor, artifacts, traps
 
 
 def _cor_envelope(cor):
@@ -675,31 +636,57 @@ def _cor_envelope(cor):
 
 
 # --------------------------------------------------------------------------
+# The computer's marks: physiopipe's own, for exactly these signals (version 2, A7)
+# --------------------------------------------------------------------------
+
+MACHINE_QC_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "practice_urglab_machine_qc.json")
+
+
+def load_machine_qc(path=MACHINE_QC_FILE):
+    """physiopipe's computed MachineQC for the practice files (its JSON, as it sent it), or None if absent."""
+    import json
+    if not os.path.isfile(path):
+        return None
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _subtract(spans, minus):
+    """spans with the stretches in `minus` taken out (both half-open, any order)."""
+    out = []
+    for a, b in _merge(spans):
+        pieces = [[a, b]]
+        for c, d in _merge(minus):
+            pieces = [p for q in pieces for p in ([[q[0], min(q[1], c)]] if q[0] < c else [])
+                      + ([[max(q[0], d), q[1]]] if q[1] > d else []) if p[1] > p[0]]
+        out += pieces
+    return _merge(out)
+
+
+def _empty_machine(n):
+    return {ch: {"BadSegments": [], "SegmentsByReason": {r: [] for r in REASONS[ch]}, "Rule": MACHINE_RULES[ch],
+                 "ProportionBad": 0.0} for ch in REASONS}
+
+
+# --------------------------------------------------------------------------
 # One participant, the sidecar, and the practice folder
 # --------------------------------------------------------------------------
 
-def _machine_entry(reasons, n, ch):
-    by_reason = {r: _merge(reasons.get(r, [])) for r in REASONS[ch]}
-    union = _merge([s for spans in by_reason.values() for s in spans])
-    return {"BadSegments": union, "SegmentsByReason": by_reason, "Rule": MACHINE_RULES[ch],
-            "ProportionBad": round(sum(b - a for a, b in union) / n, 4)}
-
-
-def build_subject(seed, subject):
-    """(DataFrame, sidecar, run key, ecg_inverted) for one practice participant."""
+def build_signals(subject, seed=SEED):
+    """(DataFrame, cases) for one practice participant: the signals, and what was planted where."""
     plan = PLANS[subject]
-    rng = np.random.default_rng(seed)
+    rng = np.random.default_rng(seed + 101 * (SUBJECTS.index(subject) + 1))
     n = N_SAMPLES
     t = np.arange(n) / FS
     beats, pvc = _beat_times(rng, plan["ecg"]["heart_rate"], plan["ecg"]["pvc_at"])
 
     ecg, upright, true_r, pvc_r, ecg_art, detected, flat = _build_ecg(rng, plan["ecg"], n, t, beats, pvc)
     ecg_seed = _ecg_seed(rng, plan["ecg"], upright, true_r, pvc_r, detected)
-    ppg, ppg_tops, ppg_seed, ppg_art, ppg_neutral, ppg_rail = _build_ppg(rng, plan["ppg"], n, t, beats, pvc)
-    belt, breath_tops, rsp_art, rsp_traps, rsp_neutral, rsp_reasons = _build_belt(
-        rng, plan["rsp"], n, t, plan["ecg"]["heart_rate"])
-    eda, scr_tops, eda_art, eda_traps, eda_reasons = _build_eda(rng, plan["eda"], n, t)
-    cor, cor_art, cor_traps, cor_keep, cor_reasons = _build_cor(rng, plan["emg_cor"], n, t)
+    ppg, ppg_tops, ppg_seed, ppg_art = _build_ppg(rng, plan["ppg"], n, t, beats, pvc)
+    belt, breath_tops, rsp_art, rsp_traps, rsp_neutral = _build_belt(rng, plan["rsp"], n, t,
+                                                                     plan["ecg"]["heart_rate"])
+    eda, scr_tops, eda_art, eda_traps = _build_eda(rng, plan["eda"], n, t)
+    cor, cor_art, cor_traps = _build_cor(rng, plan["emg_cor"], n, t)
     event, rows = _event_column(n)
 
     df = pd.DataFrame({
@@ -709,14 +696,19 @@ def build_subject(seed, subject):
         "rsp_peaks": pc._peaks_column(breath_tops, n).astype(int),
         "eda_peaks": pc._peaks_column(scr_tops, n).astype(int), "event": event, "rsp_raw": belt,
     })[COLUMNS]
+    cases = {"true_r": true_r, "pvc_r": pvc_r, "ecg_art": ecg_art, "ecg_flat": flat, "ppg_tops": ppg_tops,
+             "ppg_art": ppg_art, "rsp_art": rsp_art, "rsp_traps": rsp_traps, "rsp_neutral": rsp_neutral,
+             "eda_art": eda_art, "eda_traps": eda_traps, "cor_art": cor_art, "cor_traps": cor_traps,
+             "rows": rows, "inverted": plan["ecg"]["kind"] == "inverted"}
+    return df, cases
 
-    machine = {
-        "ecg": _machine_entry({"flat": [flat]}, n, "ecg"),
-        "ppg": _machine_entry({"rail": [ppg_rail]} if ppg_rail else {}, n, "ppg"),
-        "rsp": _machine_entry(rsp_reasons, n, "rsp"),
-        "eda": _machine_entry(eda_reasons, n, "eda"),
-        "emg_cor": _machine_entry(cor_reasons, n, "emg_cor"),
-    }
+
+def tsv_bytes(df):
+    """The practice tsv as written (before gzip): its SHA-256 ties physiopipe's marks to these signals."""
+    return df.to_csv(sep="\t", index=False, header=False).encode("utf-8")
+
+
+def build_sidecar(subject, n, rows, machine):
     sidecar = {"SamplingFrequency": FS, "StartTime": -BASELINE[0], "Columns": COLUMNS}
     for col in COLUMNS:
         units, description = COLUMN_TEXTS[col]
@@ -734,20 +726,47 @@ def build_subject(seed, subject):
         "ChannelStatus": {ch: ["ok"] for ch in REASONS},
     }
     sidecar["Pass2Inputs"] = {}
+    return sidecar
 
+
+def build_run_key(n, cases, machine):
+    """The answer key for one run, given the computer's marks (physiopipe's, version 2)."""
+    def spans(ch, reason=None):
+        by_reason = machine[ch]["SegmentsByReason"]
+        return _merge(by_reason.get(reason, []) if reason else [s for v in by_reason.values() for s in v])
+
+    # ECG: the lead-off's constant stretch has no heartbeats; physiopipe marks only its middle (keep it), and the
+    # rest of it counts either way.
+    ecg_flat = spans("ecg", "flat")
+    flat_rest = _subtract([cases["ecg_flat"]], ecg_flat)
+    bad_ecg_art = cases["ecg_art"] + [{"type": "the ECG is flat (lead off): the computer's mark is right, keep it",
+                                       "start": a, "end": b} for a, b in ecg_flat]
+    # EDA: physiopipe's floor and flat cover the lift and the stuck sensor; the floor's 2-s guard counts either way.
+    eda_neutral = _subtract(spans("eda"), [[a["start"], a["end"]] for a in cases["eda_art"]])
     channels = {
-        "ecg": {"mode": "point", "true_peaks": [int(p) for p in true_r],
-                "traps": ([{"type": "the premature (early) beat: real, keep its mark", "sample": int(pvc_r)}]
-                          if pvc_r is not None else [])},
-        "bad_ecg": {"mode": "segment", "artifacts": ecg_art, "traps": []},
-        "ppg": {"mode": "point", "true_peaks": [int(p) for p in ppg_tops], "traps": []},
-        "bad_ppg": {"mode": "segment", "artifacts": ppg_art, "traps": [], "neutral": ppg_neutral},
-        "rsp": {"mode": "segment", "artifacts": rsp_art, "traps": rsp_traps, "neutral": rsp_neutral},
-        "eda": {"mode": "segment", "artifacts": eda_art, "traps": eda_traps},
-        "emg_cor": {"mode": "segment", "artifacts": cor_art, "traps": cor_traps, "must_keep": cor_keep},
+        "ecg": {"mode": "point", "true_peaks": [int(p) for p in cases["true_r"]],
+                "traps": ([{"type": "the premature (early) beat: real, keep its mark", "sample": int(cases["pvc_r"])}]
+                          if cases["pvc_r"] is not None else [])},
+        "bad_ecg": {"mode": "segment", "artifacts": bad_ecg_art, "traps": [], "neutral": flat_rest},
+        "ppg": {"mode": "point", "true_peaks": [int(p) for p in cases["ppg_tops"]], "traps": []},
+        "bad_ppg": {"mode": "segment", "artifacts": cases["ppg_art"], "traps": []},
+        "rsp": {"mode": "segment", "artifacts": cases["rsp_art"], "traps": cases["rsp_traps"],
+                "neutral": cases["rsp_neutral"]},
+        "eda": {"mode": "segment", "artifacts": cases["eda_art"], "traps": cases["eda_traps"], "neutral": eda_neutral},
+        # COR: physiopipe's pass 2 applies every machine stretch, so each must be kept as it is.
+        "emg_cor": {"mode": "segment", "artifacts": cases["cor_art"], "traps": cases["cor_traps"],
+                    "must_keep": [{"type": _cor_mark_name(machine, a, b, n), "start": a, "end": b}
+                                  for a, b in machine["emg_cor"]["BadSegments"]]},
     }
-    run_key = {"n_samples": n, "channels": channels}
-    return df, sidecar, run_key, plan["ecg"]["kind"] == "inverted"
+    return {"n_samples": n, "channels": channels}
+
+
+def _cor_mark_name(machine, a, b, n):
+    """How the score report names one of the computer's COR stretches, e.g. 'a dead channel (flat_record)'."""
+    reasons = [r for r, v in machine["emg_cor"]["SegmentsByReason"].items() if any(x[0] < b and a < x[1] for x in v)]
+    if reasons == ["flat_record"] and [a, b] == [0, n]:
+        return "a dead channel (the whole run; flat_record)"
+    return f"a stretch it found ({', '.join(reasons)})"
 
 
 def description_hashes():
@@ -755,27 +774,60 @@ def description_hashes():
     return {col: hashlib.sha256(text.encode("utf-8")).hexdigest() for col, (_units, text) in COLUMN_TEXTS.items()}
 
 
+def _write(out_dir, subject, df, sidecar):
+    import gzip
+    import json
+    stem = f"sub-{subject}_ses-run{RUN}_task-{TASK}"
+    beh = os.path.join(out_dir, f"sub-{subject}", f"ses-run{RUN}", "beh")
+    os.makedirs(beh, exist_ok=True)
+    tsv = os.path.join(beh, f"{stem}_physio.tsv.gz")
+    with gzip.open(tsv, "wb") as f:
+        f.write(tsv_bytes(df))
+    with open(os.path.join(beh, f"{stem}_physio.json"), "w", encoding="utf-8") as f:
+        json.dump(sidecar, f, indent=2)
+    return tsv
+
+
+def draft_for_physiopipe(out_dir):
+    """
+    Writes the practice signals with EMPTY MachineQC, for physiopipe to compute its marks on (version 2, A7):
+    run this after any change to the signals, send the folder to physiopipe, and save its JSON as
+    practice_urglab_machine_qc.json. No answer key is written.
+    """
+    written = []
+    for subject in SUBJECTS:
+        df, cases = build_signals(subject)
+        written.append(_write(out_dir, subject, df, build_sidecar(subject, len(df), cases["rows"],
+                                                                  _empty_machine(len(df)))))
+    return written
+
+
 def make(out_dir, seed=None, plain_key_copy=None):
     """Writes sub-990 and sub-991 (run 1) into out_dir and the encoded key to out_dir/practice_key.pebbl."""
+    import hashlib
     import json
-    import secrets
-    if seed is None:
-        seed = secrets.randbits(31)
+    if seed is not None and int(seed) != SEED:
+        raise SystemExit(f"urglab's practice always uses seed {SEED}: its computer marks are physiopipe's, "
+                         f"computed for exactly those signals. Leave out --seed.")
+    computed = load_machine_qc(MACHINE_QC_FILE)
+    if computed is None:
+        raise SystemExit(f"{MACHINE_QC_FILE} is missing: urglab's practice needs physiopipe's computed marks.")
     out_dir = os.path.abspath(out_dir)
-    key = {"version": KEY_VERSION, "study": TASK, "seed": int(seed), "sampling_rate": FS, "criteria": CRITERIA,
+    key = {"version": KEY_VERSION, "study": TASK, "seed": SEED, "sampling_rate": FS, "criteria": CRITERIA,
            "descriptions_sha256": description_hashes(), "subjects": {}}
     written = []
-    for i, subject in enumerate(SUBJECTS):
-        df, sidecar, run_key, inverted = build_subject(int(seed) + 101 * (i + 1), subject)
-        stem = f"sub-{subject}_ses-run{RUN}_task-{TASK}"
-        beh = os.path.join(out_dir, f"sub-{subject}", f"ses-run{RUN}", "beh")
-        os.makedirs(beh, exist_ok=True)
-        tsv = os.path.join(beh, f"{stem}_physio.tsv.gz")
-        df.to_csv(tsv, sep="\t", index=False, header=False, compression="gzip")
-        with open(os.path.join(beh, f"{stem}_physio.json"), "w", encoding="utf-8") as f:
-            json.dump(sidecar, f, indent=2)
-        key["subjects"][subject] = {"ecg_inverted": inverted, "runs": {RUN: run_key}}
-        written.append(tsv)
+    for subject in SUBJECTS:
+        df, cases = build_signals(subject)
+        theirs = computed["subjects"][subject]
+        mine = hashlib.sha256(tsv_bytes(df)).hexdigest()
+        if mine != theirs["tsv_unzipped_sha256"]:
+            raise SystemExit(f"sub-{subject}'s practice signals ({mine[:12]}) aren't the ones physiopipe computed "
+                             f"its marks for ({theirs['tsv_unzipped_sha256'][:12]}). A library version or the "
+                             f"generator changed; nothing was written. Please tell the PEBBL maintainer.")
+        machine = theirs["MachineQC"]["Channels"]
+        written.append(_write(out_dir, subject, df, build_sidecar(subject, len(df), cases["rows"], machine)))
+        key["subjects"][subject] = {"ecg_inverted": cases["inverted"],
+                                    "runs": {RUN: build_run_key(len(df), cases, machine)}}
     with open(pc.key_path_for(out_dir), "w", encoding="utf-8") as f:
         f.write(pc.encode_key(key))
     if plain_key_copy:
