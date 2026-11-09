@@ -44,8 +44,10 @@ Usage:
     annotate_env\\Scripts\\python.exe physio_review.py --box-path <path> --local-path <local> --subject 001 --run 2 --initials hlu   # reuses run 1's template automatically if one already exists
 
 Any real (non-synthetic) run also copies this subject's files from Box to
---local-path, works from there, pushes back only what's new/changed, and
-removes the local copy once confirmed -- see box_sync.py. --local-path is
+the study's own folder inside --local-path (<local>/<task>, or
+<local>/<task>-practice for certification practice), works from there,
+pushes back only what's new/changed, and removes the local copy once
+confirmed -- see box_sync.py. --local-path is
 prompted for if omitted, same as --box-path; --no-local-copy skips all of
 this and works directly against --box-path instead.
 """
@@ -64,7 +66,12 @@ from box_sync import (
     copy_subject_tree_to_local,
     find_changed_files,
     find_unpushed_local_files,
+    is_pipeline_file,
+    local_copy_dir,
+    local_copy_files,
     push_changed_files_to_box,
+    study_local_root,
+    task_labels_in_local_copy,
 )
 from channel_config import CHANNELS, empty_channels, no_data_message, present_channels, select_channels
 from physio_io import (
@@ -792,6 +799,91 @@ def _handle_leftover_local_copy(real_box_path, subject, local_root):
                          f"then start again.")
 
 
+def _local_folder_problem(local_path, real_box_path):
+    """
+    Why `local_path` can't be the local working folder, or None. It mustn't be
+    a data folder: this session's own (where the old place, <local>/sub-XXX,
+    would be the data folder's own sub-XXX, which compares equal to itself and
+    would be removed as an old local copy), or any study's (it holds a
+    pebbl_study.toml).
+    """
+    def resolved(path):
+        return os.path.normcase(os.path.realpath(path))
+
+    if resolved(local_path) == resolved(real_box_path) or os.path.isfile(
+            os.path.join(local_path, study_profile.PROFILE_FILE)):
+        return (f"The local working folder ({local_path}) is a data folder. Choose your own working folder, such as "
+                f"PhysioWorking in your home folder, not a data folder.")
+    return None
+
+
+def _remove_old_local_copy(local_path, subject, why):
+    old_dir = local_copy_dir(local_path, subject)
+    cleanup_local_copy(local_path, subject)
+    if os.path.isdir(old_dir):
+        print(f"Couldn't remove the old local copy in {old_dir}. Nothing in it needs copying back, so you can "
+              f"delete that folder.")
+    else:
+        print(f"Removed the old local copy in {old_dir} ({why}).")
+
+
+def _handle_old_local_copy(real_box_path, subject, local_path, task, practice=False):
+    """
+    Until 2026-11-08 the local copy went to <local working folder>/sub-XXX
+    whatever the study; now it goes to the study's own folder inside it
+    (box_sync.study_local_root). A copy left in the old place would otherwise
+    never be seen again, so before its own leftover check each session looks
+    there once and sorts it by the task labels in its file names
+    (pebbl-private pebbl_local-copy-per-study-plan_20261108-1503.md §C3):
+      - nothing there: carry on;
+      - every label is this study's: the usual leftover check against this
+        session's data folder (same question), then the old copy is removed;
+      - only physioProcess's files (never copied back, whoever's they are):
+        removed;
+      - anything else (another study's own files, or files with no label):
+        stops before copying anything, changing nothing.
+    Never with a data folder as the local working folder (_local_folder_problem).
+    """
+    problem = _local_folder_problem(local_path, real_box_path)
+    if problem:
+        raise SystemExit(problem)
+    files = local_copy_files(local_path, subject)
+    if not files:
+        return
+    old_dir = local_copy_dir(local_path, subject)
+    labels = task_labels_in_local_copy(local_path, subject)
+    if labels == {task}:
+        _handle_leftover_local_copy(real_box_path, subject, local_path)
+        still_unpushed = find_unpushed_local_files(real_box_path, subject, local_path)
+        if still_unpushed:  # never expected after the check above; removing would lose them
+            raise SystemExit(f"Some files in the old local copy in {old_dir} still aren't in the data folder: "
+                             f"{still_unpushed}. Nothing was deleted. Please ask the lab staff.")
+        _remove_old_local_copy(local_path, subject, "everything in it is in the data folder")
+        return
+    if all(is_pipeline_file(relpath) for relpath in files):
+        _remove_old_local_copy(local_path, subject, "it held only copies of recordings, which are never copied back")
+        return
+
+    sub = os.path.basename(old_dir)
+    before = "It's from before PEBBL kept each study in its own folder"
+    if len(labels) == 1:
+        (other,) = labels
+        where_back = (f"Start that study's certification practice to send it back to its practice folder"
+                      if practice else f"Start a session for that study's {sub} to send it back to that study's "
+                                       f"data folder")
+        raise SystemExit(f"There's a local copy of {sub} from another study (its files are named task-{other}) in "
+                         f"{old_dir}. {before}, and it may hold work that was never copied back. Nothing has been "
+                         f"changed. {where_back}, or ask the lab staff.")
+    if labels:
+        named = ", ".join(f"task-{label}" for label in sorted(labels))
+        raise SystemExit(f"There's a local copy of {sub} in {old_dir} with files from more than one study (named "
+                         f"{named}). {before}, and it may hold work that was never copied back. Nothing has been "
+                         f"changed. Please ask the lab staff.")
+    raise SystemExit(f"There's a local copy of {sub} in {old_dir}, and PEBBL can't tell which study its files belong "
+                     f"to. {before}, and it may hold work that was never copied back. Nothing has been changed. "
+                     f"Please ask the lab staff.")
+
+
 def _push_back_to_box(args, local_root, real_box_path, before_snapshot):
     """Pushes new/changed files, confirms them, and cleans up -- the end of the local-copy lifecycle."""
     changed = find_changed_files(local_root, args.subject, before_snapshot)
@@ -978,12 +1070,19 @@ def _main(session_log):
         if use_local_copy:
             if not args.local_path:
                 args.local_path = input(
-                    "Local working folder (this subject's files are copied here from the data folder, worked on, "
-                    "pushed back, confirmed, then removed automatically when the session finishes): "
+                    "Local working folder (this subject's files are copied to this study's own folder inside it, "
+                    "worked on, pushed back, confirmed, then removed automatically when the session finishes): "
                 ).strip()
             if not args.local_path:
                 raise SystemExit("A local working folder (--local-path) is required.")
-            local_root = args.local_path
+            problem = _local_folder_problem(args.local_path, real_box_path)
+            if problem:
+                raise SystemExit(problem)
+            # Each study (and its practice) has its own folder inside the local
+            # working folder, so one study's leftover copy is never checked
+            # against, or pushed into, another study's data folder (2026-11-08).
+            local_root = study_local_root(args.local_path, profile.task, args.practice)
+            _handle_old_local_copy(real_box_path, args.subject, args.local_path, profile.task, args.practice)
             _handle_leftover_local_copy(real_box_path, args.subject, local_root)
             print(f"Copying sub-{str(args.subject).replace('sub-', '')}'s files from {real_box_path} "
                   f"to {local_root} ...")

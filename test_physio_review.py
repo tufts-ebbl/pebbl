@@ -346,15 +346,18 @@ def main():
             pushed_path = os.path.join(box_path_2, "sub-777", "ses-run1", "beh",
                                         "sub-777_ses-run1_task-sdi_annotations_hlu.json")
             assert os.path.exists(pushed_path), "the new annotations file should have been pushed back to Box"
-            assert not os.path.exists(os.path.join(local_path_2, "sub-777")), (
-                "the local copy's sub-777 subfolder should be cleaned up by default after a "
+            # The copy goes to the study's own folder inside --local-path (2026-11-08).
+            assert not os.path.exists(os.path.join(local_path_2, "sdi", "sub-777")), (
+                "the local copy's sdi/sub-777 subfolder should be cleaned up by default after a "
                 "successful push"
             )
+            assert os.path.isdir(os.path.join(local_path_2, "sdi")), "the study's own folder stays, empty"
+            assert os.listdir(local_path_2) == ["sdi"], os.listdir(local_path_2)
             assert os.path.isdir(local_path_2), "the reusable --local-path folder itself must survive"
             log_df_2 = pd.read_csv(os.path.join(box_path_2, "processing_log.csv"),
                                     dtype=str, keep_default_na=False)
             assert list(log_df_2["Step"]) == ["claimed", "ecg reviewed -- not finished"], list(log_df_2["Step"])
-            print(f"   OK: pushed to {os.path.basename(pushed_path)}, local sub-777 cleaned up, "
+            print(f"   OK: pushed to {os.path.basename(pushed_path)}, local sdi/sub-777 cleaned up, "
                   f"logged directly to {os.path.basename(box_path_2)} (never local_path)")
 
             print("13. --keep-local preserves the local copy even after a fully successful push...")
@@ -371,7 +374,7 @@ def main():
 
             assert os.path.exists(os.path.join(box_path_3, "sub-778", "ses-run1", "beh",
                                                 "sub-778_ses-run1_task-sdi_annotations_hlu.json"))
-            assert os.path.isdir(os.path.join(local_path_3, "sub-778")), (
+            assert os.path.isdir(os.path.join(local_path_3, "sdi", "sub-778")), (
                 "--keep-local should preserve the local copy despite a fully successful push"
             )
             print("   OK: local copy preserved under --keep-local")
@@ -390,7 +393,7 @@ def main():
                           "--initials", "hlu", "--channels", "ecg", "--stage", "2",
                           "--ecg-source", "batch", "--local-path", local_path_4])
 
-            assert os.path.isdir(os.path.join(local_path_4, "sub-779")), (
+            assert os.path.isdir(os.path.join(local_path_4, "sdi", "sub-779")), (
                 "a failed confirmation must preserve the ENTIRE local copy, never delete on failure"
             )
             print("   OK: local copy preserved after a simulated confirmation failure")

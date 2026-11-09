@@ -187,7 +187,9 @@ def test_c2_interrupted_session_still_pushes():
                 assert e.code == 130, e.code
         with open(os.path.join(box, "sub-071", "ses-run1", "beh", target)) as f:
             assert json.load(f)["version"] == "saved-this-session"
-        assert not os.path.exists(os.path.join(local, "sub-071")), "local copy should be cleaned up after the push"
+        # The copy is in the study's own folder (2026-11-08), so that's where it must be gone from.
+        assert os.path.isdir(os.path.join(local, "sdi")), os.listdir(local)
+        assert not os.path.exists(os.path.join(local, "sdi", "sub-071")), "local copy should be cleaned up after the push"
         lines = [l for l in out.getvalue().splitlines() if l.strip()]
         assert lines[-1].startswith("=====") and "TRACKING SPREADSHEET" in "\n".join(lines[-6:]), lines[-6:]
         print("   OK: saved file reached Box, local copy removed, reminder printed last")
