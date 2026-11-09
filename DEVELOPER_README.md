@@ -1303,8 +1303,10 @@ one side: `--compare-initials <trainee>,<your_own_initials>`.
 A simulated practice participant, **sub-990**, with **runs 1 and 2** (180 s
 each, every channel the real files have, built with neurokit2's
 simulators), deliberate mistakes in the machine's marks, real-but-odd
-"traps", and an **answer key** (the gold standard). Key version 7
-(2026-10-05); older practice folders and keys can't be scored by this
+"traps", and an **answer key** (the gold standard). Key version 8
+(2026-11-08: the small pulse after the premature beat is a pulse to mark,
+under one bad_ppg guidance for sdi and urglab; the files are unchanged
+from version 7, only the key); older practice folders and keys can't be scored by this
 version, so make a new folder.
 
 1. **Lab staff make it once**, in a `practice` folder next to the Box
@@ -1345,7 +1347,7 @@ version, so make a new folder.
 | Channel | To fix | Traps: real, keep or leave unmarked | Machine marks it starts with |
 |---|---|---|---|
 | ECG | scanner-like signal: tall T waves (taller in one stretch), spikes, 4 s of heavy noise to mark `bad_ecg`; the `ecg_peaks` seed also has 3 missed beats, 2 marks on T waves and 1 misplaced | a premature ventricular beat (wide, oddly shaped, large T wave pointing the other way) with its compensatory pause | — |
-| PPG | 3 missed pulses, 2 marks on the dicrotic wave, 1 on the upslope, a device dropout (mark `bad_ppg`) with a spurious seed in it; the weak, odd pulse after the premature beat (mark `bad_ppg`; the machine doesn't) | 4 two-humped pulses seeded on the other hump (either hump passes) | the dropout (`zero_run`) |
+| PPG | 3 missed pulses, 2 marks on the dicrotic wave, 1 on the upslope, a device dropout (mark `bad_ppg`) with a spurious seed in it | 4 two-humped pulses seeded on the other hump (either hump passes); the small pulse after the premature beat, a pulse to keep (key 8) | the dropout (`zero_run`) |
 | RSP | 2 stretches where the belt stopped (flat); a held breath (flat); clipped breath tops (deep breaths cut flat at the run's maximum) | a sigh (one whole breath, twice as deep), shallow breathing (eases in and out) | flags the held breath, the clipping and one dead stretch, misses the other, falsely flags the shallow breathing |
 | EDA | electrode lift, motion spikes, stuck sensor (flat) | 5 real skin conductance responses | flags the lift and spikes, misses the flat stretch, falsely flags one SCR |
 | SBP / DBP | leading blank, recalibration (held flat), implausible spike, a no-reading blank, a 1.2-s gap, BP inside the PPG dropout | — | flags all but the spike; falsely flags 6 s of clean BP |
@@ -1424,7 +1426,7 @@ and `test_urglab_practice.py` item 1 keeps it byte-for-byte the same.
     - the EDA lift gets `floor`, with 2 s of guard each side;
     - `snr` and `ecg_unconfirmed` stay empty in a 180-s file.
 - **One key version per study:** `practice_certification.KEY_VERSIONS =
-  {"sdi": 7, "urglab": 2}`. sdi's key keeps its old shape (no `study`
+  {"sdi": 8, "urglab": 3}`. sdi's key keeps its old shape (no `study`
   field); urglab's has `"study": "urglab"` and `"subjects": {"990": ...,
   "991": ...}`.
 - **Scoring additions, used only by urglab's key:**
@@ -1441,7 +1443,7 @@ and `test_urglab_practice.py` item 1 keeps it byte-for-byte the same.
 |---|---|---|---|
 | ECG 990 | missed beats; seed marks on the S, the rebound after it and T waves (some T waves are taller than the r); 4 s of noise (`bad_ecg`) | lead off, 8 s constant (`flat` on its middle) | the small r; a premature beat |
 | ECG 991 | tick Flip; missed beats; marks on T waves; 4 s of noise | lead off, 8 s constant (`flat` on its middle) | |
-| PPG 990 | missed pulses, marks on the dicrotic wave and a slope; a hand movement and the weak pulse after the premature beat (`bad_ppg`) | | pulses of varying height |
+| PPG 990 | missed pulses, marks on the dicrotic wave and a slope; a hand movement, big irregular waves hiding the pulses (`bad_ppg`) | | pulses of varying height; the small pulse after the premature beat, a pulse to keep (key 3) |
 | RSP 990 (on `rsp_raw`) | extend the partial `flat` over a 40-s noise-only dead belt; mark a slow 3.5-V drop at a task event | a fast 4-V drop and return at a task event (`swing`) | a sigh |
 | RSP 991 | mark an 8-s held breath; trim `rail` to a 40-ms pop and to the belt held at its limit then jumping | | shallow breathing |
 | EDA 990 | | an electrode lift (`floor`; its 2-s guard is neutral), a stuck sensor constant over 124-136 s (`flat` on the file-aligned window 125-135 s) | 5 real responses; no brief-glitch case (A5 is open) |
@@ -1895,8 +1897,9 @@ and real-data-gets-its-own-scale) and `test_real_data.py`/`test_column_subsets.p
   answer key; made through `practice_certification.py make --study-profile`
   (see "urglab's practice" above).
 - `practice_urglab_machine_qc.json` — physiopipe's own computer marks for
-  those signals (its JSON, unchanged; physiopipe b21f82b, urglab profile
-  21078f4f17b8), with each file's SHA-256, which `make` checks.
+  those signals (its JSON, unchanged; recomputed for key version 3 with
+  physiopipe b21f82b and urglab profile 21078f4f17b8), with each file's
+  SHA-256, which `make` checks.
 - `practice_report_gui.py` — the practice score window shown after each
   saved practice review, with its "Compare with the answer key" button.
 - `test_urglab_practice.py` — urglab's practice:

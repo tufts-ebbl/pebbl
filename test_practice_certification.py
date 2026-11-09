@@ -99,11 +99,12 @@ def main():
             assert untouched["channels"][ch]["bad_segments"] == sidecar["MachineQC"]["Channels"][ch]["BadSegments"], ch
         ok, results, lines = pc.score_run(key, untouched, "1")
         text = "\n".join(lines)
-        assert not ok and results["bad_ppg"] is False, (results, text)
-        assert "OK   finger-pulse dropout" in text, "the machine's dropout mark is right"
-        assert "FIX  the weak, odd pulse after the premature beat: mark it bad_ppg" in text, \
-            "the machine doesn't mark the weak pulse; the RA must"
-        for ch in ("ecg", "bad_ecg", "ppg", "bad_ppg", "rsp", "eda", "sbp", "dbp"):
+        assert not ok and results["bad_ppg"] is True, (results, text)
+        assert "OK   finger-pulse dropout" in text, "the machine's dropout mark is right, and it's bad_ppg's only one"
+        assert "the weak, odd pulse" not in text, "key 8: the small pulse after the premature beat is a pulse"
+        assert "OK   the small pulse after the premature beat: a real pulse, keep its mark" in text, \
+            "the machine's seed marks it, so the untouched review keeps it"
+        for ch in ("ecg", "bad_ecg", "ppg", "rsp", "eda", "sbp", "dbp"):
             assert results[ch] is False, (ch, text)
         assert "extra mark(s) where there's no heartbeat" in text and "with no mark within 20 ms" in text, text
         for ch in ("rsp", "eda", "sbp", "dbp"):
@@ -206,28 +207,30 @@ def main():
         assert f"at {sigh['start'] / sfreq:.1f}-" in fine_line, fine_line
         print(f"   OK: {fine_line.strip()}")
 
-        print("9. PPG (HLU, 2026-10-05): the weak pulse after the premature beat is a bad_ppg stretch (its own "
-              "wave), not a pulse to keep; marking up to 2 s either side of the dropout is fine...")
+        print("9. PPG (key 8; HLU, 2026-11-08: one bad_ppg guidance for sdi and urglab): the small pulse after the "
+              "premature beat is a pulse to mark, not a bad_ppg stretch; marking up to 2 s either side of the "
+              "dropout is fine...")
         bad_ppg = run1["channels"]["bad_ppg"]
-        drop, weak = bad_ppg["artifacts"]
-        assert drop.get("leeway_sec") == 2.0 and "weak, odd pulse" in weak["type"]
-        assert run1["channels"]["ppg"]["traps"] == []
-        assert (weak["end"] - weak["start"]) / sfreq < 1.2, "the odd pulse itself, not the pause after it"
+        [drop] = bad_ppg["artifacts"]
+        assert drop.get("leeway_sec") == 2.0
+        [small] = run1["channels"]["ppg"]["traps"]
+        assert "small pulse after the premature beat" in small["type"] and small["sample"] in \
+            run1["channels"]["ppg"]["true_peaks"]
         sub = perfect(run1)
-        sub["channels"]["bad_ppg"]["bad_segments"] = [[drop["start"] - 1900, drop["end"] + 1900],
-                                                      [weak["start"], weak["end"]]]
+        sub["channels"]["bad_ppg"]["bad_segments"] = [[drop["start"] - 1900, drop["end"] + 1900]]
         assert pc.score_run(key, sub, "1", ["bad_ppg"])[1] == {"bad_ppg": True}, "1.9 s each side of the dropout"
         sub["channels"]["bad_ppg"]["bad_segments"][0] = [drop["start"] - 4500, drop["end"] + 4500]
         assert pc.score_run(key, sub, "1", ["bad_ppg"])[1] == {"bad_ppg": False}, "4.5 s each side is too much"
-        sub["channels"]["bad_ppg"]["bad_segments"] = [[drop["start"], drop["end"]]]
-        ok, _res, lines = pc.score_run(key, sub, "1", ["bad_ppg"])
-        assert not ok and any(l.startswith("  FIX  the weak, odd pulse") for l in lines), lines
         sub = perfect(run1)
-        sub["channels"]["ppg"]["indices"].remove(run1["channels"]["ppg"]["true_peaks"][
-            int(np.argmin(np.abs(np.asarray(run1["channels"]["ppg"]["true_peaks"]) - (weak["start"] + weak["end"]) / 2)))])
-        assert pc.score_run(key, sub, "1", ["ppg", "bad_ppg"])[0], "no mark on the weak pulse inside its bad stretch"
-        print("   OK: weak pulse is bad_ppg; 1.9 s around the dropout passes, 4.5 s doesn't; unmarked weak pulse fails; "
-              "its peak needn't be marked")
+        sub["channels"]["ppg"]["indices"].remove(small["sample"])
+        ok, _res, lines = pc.score_run(key, sub, "1", ["ppg", "bad_ppg"])
+        assert not ok and any(l.startswith("  FIX  the small pulse after the premature beat") for l in lines), lines
+        sub["channels"]["bad_ppg"]["bad_segments"].append([small["sample"] - 300, small["sample"] + 300])
+        ok, results, lines = pc.score_run(key, sub, "1", ["ppg", "bad_ppg"])
+        assert not ok and results == {"ppg": False, "bad_ppg": True}, \
+            "marking it bad_ppg instead of giving it a peak fails PPG: it's a pulse to keep"
+        print("   OK: the small pulse is a pulse to keep (unmarked, or marked bad_ppg instead, fails PPG); 1.9 s "
+              "around the dropout passes, 4.5 s doesn't")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     print("\nALL PRACTICE CERTIFICATION TESTS PASSED.")

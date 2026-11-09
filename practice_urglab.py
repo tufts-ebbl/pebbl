@@ -41,8 +41,10 @@ What RAs fix, keep and leave (plan answer 2, addendum A2):
         mark bad_ecg; keep the premature beat and the computer's lead-off
         mark (the middle of an 8-s flat stretch; the rest counts either way). 991: tick Flip; missed beats, marks on T waves, a noise burst.
   PPG   990: missed pulses, marks on the dicrotic wave and on a slope; a hand
-        movement and the weak pulse after the premature beat, both bad_ppg.
-        991: clean (scored, not certified).
+        movement (big irregular waves hiding the pulses) to mark bad_ppg; the
+        small pulse after the premature beat is a pulse to keep (key version
+        3; one bad_ppg guidance for sdi and urglab). 991: clean (scored, not
+        certified).
   RSP   (judged on rsp_raw; the hidden first and last 15 s and the drift back
         after a step are neutral, addendum A3)
         990: extend the partial `flat` over a noise-only dead belt; add a mark
@@ -389,9 +391,11 @@ def _build_ppg(rng, plan, n, t, beats, pvc):
         shapes.append((c, [(0.0, 0.07, 0.5 * amp), (0.30, 0.06, 0.14 * amp)]))
     ppg = _waves(t, n, shapes) + 0.05 * np.sin(2 * np.pi * 0.1 * t) + rng.normal(0, 0.005, n)
     artifacts = []
-    if plan["movement"]:
+    if plan["movement"]:  # big, irregular waves that hide the pulses (key version 3: version 2's were unscaled,
+        #                   about a sixth of a pulse, so every pulse stayed clear; HLU, 2026-11-08)
         m0, m1 = _s(plan["movement"][0]), _s(sum(plan["movement"]))
-        ppg[m0:m1] += _lowpass(rng.normal(0, 1, m1 - m0), 2.5) * 1.2 * pc._taper(m1 - m0, 0.3)
+        wave = _lowpass(rng.normal(0, 1, m1 - m0), 2.5)
+        ppg[m0:m1] += wave / wave.std() * 0.9 * pc._taper(m1 - m0, 0.3)
         artifacts.append({"type": "hand movement (big, irregular waves): mark it bad_ppg", "start": m0, "end": m1})
     ppg = _band(ppg, 0.5, 8.0)  # physiopipe's 'elgendi' clean
     # Version 1's "sensor at its limit" case is gone (A7): physiopipe's rail needs +-10 V, which no practice
@@ -403,13 +407,9 @@ def _build_ppg(rng, plan, n, t, beats, pvc):
         if 300 <= idx < n - 600:
             tops.append(_refine(ppg, idx, 40))
     tops = np.asarray(sorted(set(tops)))
+    # The small pulse after the premature beat is a pulse to mark (key version 3; HLU, 2026-11-08: one bad_ppg
+    # guidance for sdi and urglab), so it's a trap in the key, not a bad_ppg stretch.
     pvc_top = int(tops[np.argmin(np.abs(tops - _s(centres[pvc])))]) if pvc is not None else None
-    if pvc_top is not None:  # the weak, odd pulse after the premature beat, trough to the end of its own wave
-        j = int(np.searchsorted(tops, pvc_top))
-        w0 = int(tops[j - 1] + np.argmin(ppg[tops[j - 1]:pvc_top]))
-        w1 = int(min(pvc_top + 0.45 * FS, pvc_top + np.argmin(ppg[pvc_top:tops[j + 1]])))
-        artifacts.append({"type": "the weak, odd pulse after the premature beat: mark it bad_ppg", "start": w0,
-                          "end": w1})
     detected = list(tops)
     if plan["movement"]:  # the detector also finds 'pulses' in the movement
         m0, m1 = _s(plan["movement"][0]), _s(sum(plan["movement"]))
@@ -418,7 +418,7 @@ def _build_ppg(rng, plan, n, t, beats, pvc):
     seed = pc._seed_with_errors(ppg, tops, detected, plan["missed"], [(x, 0.30) for x in plan["on_dicrotic"]],
                                 [(x, -0.06) for x in plan["on_slope"]], [pvc_top] if pvc_top is not None else [],
                                 rng)
-    return ppg, tops, seed, artifacts
+    return ppg, tops, seed, artifacts, pvc_top
 
 
 # --------------------------------------------------------------------------
@@ -682,7 +682,7 @@ def build_signals(subject, seed=SEED):
 
     ecg, upright, true_r, pvc_r, ecg_art, detected, flat = _build_ecg(rng, plan["ecg"], n, t, beats, pvc)
     ecg_seed = _ecg_seed(rng, plan["ecg"], upright, true_r, pvc_r, detected)
-    ppg, ppg_tops, ppg_seed, ppg_art = _build_ppg(rng, plan["ppg"], n, t, beats, pvc)
+    ppg, ppg_tops, ppg_seed, ppg_art, ppg_small = _build_ppg(rng, plan["ppg"], n, t, beats, pvc)
     belt, breath_tops, rsp_art, rsp_traps, rsp_neutral = _build_belt(rng, plan["rsp"], n, t,
                                                                      plan["ecg"]["heart_rate"])
     eda, scr_tops, eda_art, eda_traps = _build_eda(rng, plan["eda"], n, t)
@@ -697,6 +697,7 @@ def build_signals(subject, seed=SEED):
         "eda_peaks": pc._peaks_column(scr_tops, n).astype(int), "event": event, "rsp_raw": belt,
     })[COLUMNS]
     cases = {"true_r": true_r, "pvc_r": pvc_r, "ecg_art": ecg_art, "ecg_flat": flat, "ppg_tops": ppg_tops,
+             "ppg_small": ppg_small,
              "ppg_art": ppg_art, "rsp_art": rsp_art, "rsp_traps": rsp_traps, "rsp_neutral": rsp_neutral,
              "eda_art": eda_art, "eda_traps": eda_traps, "cor_art": cor_art, "cor_traps": cor_traps,
              "rows": rows, "inverted": plan["ecg"]["kind"] == "inverted"}
@@ -748,7 +749,9 @@ def build_run_key(n, cases, machine):
                 "traps": ([{"type": "the premature (early) beat: real, keep its mark", "sample": int(cases["pvc_r"])}]
                           if cases["pvc_r"] is not None else [])},
         "bad_ecg": {"mode": "segment", "artifacts": bad_ecg_art, "traps": [], "neutral": flat_rest},
-        "ppg": {"mode": "point", "true_peaks": [int(p) for p in cases["ppg_tops"]], "traps": []},
+        "ppg": {"mode": "point", "true_peaks": [int(p) for p in cases["ppg_tops"]],
+                "traps": ([{"type": "the small pulse after the premature beat: a real pulse, keep its mark",
+                            "sample": int(cases["ppg_small"])}] if cases["ppg_small"] is not None else [])},
         "bad_ppg": {"mode": "segment", "artifacts": cases["ppg_art"], "traps": []},
         "rsp": {"mode": "segment", "artifacts": cases["rsp_art"], "traps": cases["rsp_traps"],
                 "neutral": cases["rsp_neutral"]},
