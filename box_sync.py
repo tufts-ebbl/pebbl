@@ -20,6 +20,16 @@ call -- the long interactive session that follows never touches the
 source file again, so working from a local copy changes nothing about
 correctness, only where the bytes physically sit while editing happens.
 
+Each study has its own folder inside the RA's local working folder:
+study_local_root() gives <local working folder>/<task> (e.g. PhysioWorking/sdi),
+or <task>-practice for certification practice, and the functions below take
+that as local_root. Until 2026-11-08 every study shared
+<local working folder>/sub-XXX, so a leftover copy from one study could be
+checked against, and pushed into, another study's data folder for the same
+sub- number (pebbl-private pebbl_local-copy-per-study-plan_20261108-1503.md).
+physio_review.py still looks at that old place once per session, using
+task_labels_in_local_copy() and local_copy_files() to tell whose copy it is.
+
 "Confirming" a push only checks that the Box Drive mount has the file with
 a fresh modification time -- it confirms the LOCAL WRITE succeeded, not
 that Box's cloud servers have finished syncing it (that isn't practically
@@ -30,14 +40,60 @@ and a clear message says exactly where, since cleanup is irreversible.
 """
 
 import os
+import re
 import shutil
 import time
 
 CONFIRM_TOLERANCE_SECONDS = 300
+PRACTICE_SUFFIX = "-practice"
+TASK_FOLDER_PATTERN = re.compile(r"^[A-Za-z0-9]+$")  # study_profile.TASK_PATTERN: a BIDS label
+TASK_LABEL_IN_NAME = re.compile(r"_task-([^_]+)_")
 
 
 def _subject_dir_name(subject):
     return subject if str(subject).startswith("sub-") else f"sub-{subject}"
+
+
+def study_local_root(local_path, task, practice=False):
+    """
+    This study's own folder inside the RA's local working folder (local_path):
+    <local_path>/<task> for the study's data, <local_path>/<task>-practice for
+    its certification practice. task is the study profile's task label, which
+    study_profile.py already checks is letters and digits only; checked again
+    here because it becomes a folder name. A task can't contain "-", so
+    "<task>-practice" is never another study's folder, and neither can ever be
+    a "sub-XXX" folder.
+    """
+    if not isinstance(task, str) or not TASK_FOLDER_PATTERN.match(task):
+        raise ValueError(f"a study's task label must be letters and digits only, not {task!r}")
+    return os.path.join(local_path, task + PRACTICE_SUFFIX if practice else task)
+
+
+def local_copy_dir(local_root, subject):
+    """local_root/sub-<subject>: where a subject's local copy is."""
+    return os.path.join(local_root, _subject_dir_name(subject))
+
+
+def local_copy_files(local_root, subject):
+    """Every file in local_root/sub-<subject>/, as relpaths relative to local_root (sorted); [] if none."""
+    subject_dir = local_copy_dir(local_root, subject)
+    found = []
+    for dirpath, _dirnames, filenames in os.walk(subject_dir):
+        found += [os.path.relpath(os.path.join(dirpath, name), local_root) for name in filenames]
+    return sorted(found)
+
+
+def task_labels_in_local_copy(local_root, subject):
+    """
+    The task labels (the <label> in "_task-<label>_") in the names of the
+    files in local_root/sub-<subject>/, as a set. Every file PEBBL or
+    physioProcess writes there has one (sub-XXX_ses-runY_task-<task>_...), so
+    a copied-down folder always shows whose study it is.
+    """
+    labels = set()
+    for relpath in local_copy_files(local_root, subject):
+        labels.update(TASK_LABEL_IN_NAME.findall(os.path.basename(relpath)))
+    return labels
 
 
 UNPUSHED_MTIME_TOLERANCE_SECONDS = 2

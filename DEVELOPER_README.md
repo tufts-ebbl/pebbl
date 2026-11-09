@@ -409,8 +409,36 @@ annotate_env\Scripts\python.exe physio_review.py --box-path <path> --local-path 
 
 - `--local-path`: a folder you reuse across sessions/subjects (like
   `--box-path`, prompted for if omitted). Each session copies
-  `sub-XXX/` into it, works there, then removes just that `sub-XXX/`
-  subfolder when done -- the `--local-path` folder itself is never deleted.
+  `sub-XXX/` into the study's own folder inside it, works there, then
+  removes just that `sub-XXX/` subfolder when done -- the `--local-path`
+  folder itself, and the study's folder, are never deleted.
+- **One folder per study** (2026-11-08; pebbl-private
+  `pebbl_local-copy-per-study-plan_20261108-1503.md`): the copy goes to
+  `<local-path>/<task>/sub-XXX/`, where `<task>` is the study profile's
+  task label (`PhysioWorking\sdi`, `PhysioWorking\urglab`), and to
+  `<local-path>/<task>-practice/` for certification practice
+  (`box_sync.study_local_root`). Before this every study shared
+  `<local-path>/sub-XXX/`, so a leftover copy from one study was checked
+  against, and on `y` pushed into, another study's data folder with the same
+  sub- number (always so for practice sub-990). The form is unchanged.
+- **Copies in the old place** (`<local-path>/sub-XXX/`): each session looks
+  there once, before its own leftover check, and sorts what it finds by the
+  task labels in the file names (`physio_review._handle_old_local_copy`):
+  - every label is this study's: the usual leftover question against this
+    session's data folder, then the old copy is removed;
+  - physioProcess's files only (whoever's): removed;
+  - anything else (another study's own files, files from more than one
+    study, or files with no task label): the session stops before copying
+    anything, with nothing changed. With one other study, a session for that
+    study's sub-XXX sorts it out. Otherwise, by hand: copy each non-pipeline
+    file that's newer than (or missing from) the data folder of the study its
+    name says, then delete the old `sub-XXX/`.
+- **A data folder can't be the local working folder**: the session stops if
+  `--local-path` is this session's data folder or holds a `pebbl_study.toml`
+  (`physio_review._local_folder_problem`). Otherwise the old place would be
+  the data folder's own `sub-XXX/`, which matches itself, so it would be
+  removed as an old local copy (shown in `test_local_copy_per_study.py`
+  item 8).
 - physioProcess's own files (`*_physio.tsv.gz`, `*_physio.json`) are **never**
   pushed back, not even from a leftover local copy: after a reprocess, an old
   local copy would otherwise overwrite Box's current file (2026-09-26).
@@ -1139,8 +1167,11 @@ Box.
 **If a session ends early** (Ctrl-C, an error, a stop you chose), whatever
 was already saved is still copied back to Box and confirmed. If a leftover
 local copy from an earlier session still holds files that never reached
-Box, the next session lists them and asks before doing anything. Answer
-`y` to copy them to Box first; anything else stops without touching them.
+Box, the next session of the same study for that subject lists them and asks
+before doing anything. Answer `y` to copy them to Box first; anything else
+stops without touching them. Each study's copies are in its own folder inside
+the local working folder, so the list only ever holds that study's files (see
+"Working from Box").
 
 **Which subject to do next** comes from the Google tracking spreadsheet: RAs
 are assigned files, and the tool no longer suggests a subject in the form or
@@ -1810,6 +1841,11 @@ and real-data-gets-its-own-scale) and `test_real_data.py`/`test_column_subsets.p
 - `test_box_sync.py` — tests the local-copy lifecycle's functions in
   isolation: mirroring, change detection, push-back with confirmation
   (including a simulated failure), and cleanup scoped to just one subject.
+- `test_local_copy_per_study.py` — each study's local copy in its own folder:
+  two studies sharing a sub- number and one local working folder (a whole
+  Step 2 session), the old shared place as a negative control, copies left in
+  the old place (this study's, another study's, physioProcess's files only,
+  mixed, unlabeled, empty), and separate practice folders.
 - `test_migrate_legacy_json.py` — tests the legacy-JSON converter: filename
   parsing, `processing_log.csv`-based initials lookup (including preferring
   the most recent of several matching rows, and an `--initials-for`

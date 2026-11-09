@@ -104,8 +104,10 @@ Built by `physio_io.find_run_path` from the data folder, subject and run:
   stem, the file name minus `_physio.tsv.gz`: for example
   `sub-001_ses-run1_task-sdi_annotations_abc.json`.
 - **Working from a shared folder** (`box_sync`): PEBBL copies `sub-<SSS>/` to
-  a local working folder, works there, then copies new or changed files back
-  and confirms each one before deleting the local copy. It never copies the
+  the study's own folder inside the local working folder (`<local>/<task>/`,
+  or `<local>/<task>-practice/` for certification practice; since
+  2026-11-08), works there, then copies new or changed files back and
+  confirms each one before deleting the local copy. It never copies the
   recording or sidecar (`*_physio.tsv.gz`, `*_physio.json`) back.
 - **Initials** are 2-4 lowercase letters.
 
