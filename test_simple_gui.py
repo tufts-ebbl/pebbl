@@ -519,6 +519,30 @@ def main():
 
         dlg.synthetic_checkbox.setChecked(True)
         assert not dlg.practice_checkbox.isEnabled(), "practice uses the practice folder, not synthetic data"
+        dlg.synthetic_checkbox.setChecked(False)
+
+        # One practice participant (sdi): the box reads as before and there's no participant list.
+        assert dlg.practice_checkbox.text() == simple_gui.PRACTICE_BOX_LABEL
+        dlg.practice_checkbox.setChecked(True)
+        assert not dlg._main_form.isRowVisible(dlg._practice_subject_row)
+        # Two (urglab, plan answer 4): the box names both, and the list chooses which one is locked in.
+        practice_root = os.path.join(tmp_dir, "practice")
+        for sub in ("sub-990", "sub-991"):
+            os.makedirs(os.path.join(practice_root, sub))
+        os.makedirs(os.path.join(practice_root, "sub-notes"))  # not a participant folder
+        assert simple_gui.practice_subjects(practice_root) == ["990", "991"]
+        assert simple_gui.practice_subjects(os.path.join(tmp_dir, "nowhere")) == ["990"]
+        dlg._set_practice_subjects(simple_gui.practice_subjects(practice_root))
+        dlg._on_field_changed()
+        assert dlg.practice_checkbox.text() == "Practice for certification (practice participants 990 and 991)"
+        assert dlg._main_form.isRowVisible(dlg._practice_subject_row)
+        assert dlg.subject_edit.text() == "990" and not dlg.subject_edit.isEnabled()
+        dlg.practice_subject_combo.setCurrentText("991")
+        assert dlg.subject_edit.text() == "991"
+        dlg._on_submit()
+        assert dlg.result_values["subject"] == "991" and dlg.result_values["practice"] is True
+        dlg.practice_checkbox.setChecked(False)
+        assert dlg.subject_edit.text() == "012" and not dlg._main_form.isRowVisible(dlg._practice_subject_row)
 
         with open(os.path.join(derivatives, "processing_log.csv"), "w") as f:
             f.write("Subject,Run,Initials,Step,Notes,Timestamp\nsub-001,1,HLU,ecg reviewed,,1/1/2026 9:00\n")

@@ -292,7 +292,12 @@ Written by `processing_log.append_processing_log_entry` in the data folder
   synthetic runs for subject 990 in the layout of section 3, with sidecars in
   the format of section 2 (`Provenance.Practice: true`), and
   `practice_key.pebbl`, the answer key: one header line, then the key as
-  zlib-compressed, base64-encoded JSON.
+  zlib-compressed, base64-encoded JSON. With urglab's profile
+  (`--study-profile`), `practice_urglab.py` writes subjects 990 and 991 (run
+  1, `task-urglab`) in physiopipe's format, matching
+  `fixtures/urglab_reference_sidecar.json`. Their key has `"study": "urglab"`,
+  one entry per participant under `"subjects"` (with `ecg_inverted`), and
+  `descriptions_sha256`.
 - **Alignment report:** `check_reprocess_alignment.py --report <csv>` writes
   one row per checked run.
 - **Install marker:** `annotate_env/requirements.installed.txt`, the
