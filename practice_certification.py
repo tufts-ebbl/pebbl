@@ -49,8 +49,9 @@ automatic detections)
     "don't move a mark between humps", 2026-10-04). Beats inside the RA's own
     bad stretches are excused; the bad stretches themselves are scored as the
     bad_ecg/bad_ppg channel. Missed beats and extra marks are listed with
-    their times; the premature beat (ECG) must be kept. Its weak, odd
-    pulse (PPG) is a bad_ppg stretch to mark (HLU, 2026-10-05).
+    their times; the premature beat (ECG) must be kept, and so must the small
+    pulse after it (PPG: give it a peak on its tallest bump; HLU, 2026-11-08,
+    one bad_ppg guidance for sdi and urglab).
   Segment channels: every artifact at least 80% marked, no real event or
     machine false flag more than 25% marked, at most 2 s marked outside the
     artifacts (1 s of leeway around each; 2 s around the PPG dropout).
@@ -77,13 +78,17 @@ FS = 1000
 DURATION_SEC = 180
 PRACTICE_SUBJECT = "990"
 RUNS = ("1", "2")
-KEY_VERSION = 7  # 5 (2026-10-04): neurokit2 signals, runs 1 and 2, outcome scoring, key in the practice folder
+KEY_VERSION = 8  # 5 (2026-10-04): neurokit2 signals, runs 1 and 2, outcome scoring, key in the practice folder
 #                 6 (2026-10-05, HLU's practice run): a textbook PVC; RSP flat hold and real clipping are artifacts
 #                 7 (2026-10-05, HLU): the weak pulse after the PVC is a bad_ppg stretch to mark, not a pulse to keep
+#                 8 (2026-11-08, HLU: "I want sdi and urglab to follow the same bad_ppg guidance"): the weak pulse
+#                   after the PVC is a pulse to mark again; the signals are unchanged, only the key
 # One key version per study (HLU, 2026-11-08: "a change to a study's practice data bumps *that study's* key
 # version"). An sdi key has no "study" field, so its bytes don't change; urglab keys (practice_urglab.py) say
 # "study": "urglab" and hold several practice participants under "subjects".
-KEY_VERSIONS = {"sdi": KEY_VERSION, "urglab": 2}  # urglab 2 (2026-11-08, A7): physiopipe's own computer marks
+KEY_VERSIONS = {"sdi": KEY_VERSION, "urglab": 3}  # urglab 2 (2026-11-08, A7): physiopipe's own computer marks;
+#                                                   3 (2026-11-08, HLU's pilot): a real PPG hand movement, and the
+#                                                   small pulse after the premature beat is a pulse to keep
 KEY_FILENAME = "practice_key.pebbl"
 KEY_HEADER = "PEBBL practice answer key (encoded; lab staff: practice_certification.py score)\n"
 
@@ -492,15 +497,16 @@ def build_run(seed, run):
                        "traps": [{"type": "the premature (early) beat: real, keep its mark", "sample": int(pvc_r)}]}
     channels["bad_ecg"] = {"mode": "segment", "artifacts": ecg_art, "traps": []}
 
-    ppg, tops, accept, pvc_top, ppg_seed, dropout, weak = _build_ppg(rng, plan, n, t, true_r, pvc_r)
+    ppg, tops, accept, pvc_top, ppg_seed, dropout, _weak = _build_ppg(rng, plan, n, t, true_r, pvc_r)
+    # Key version 8 (HLU, 2026-11-08: one bad_ppg guidance for sdi and urglab): the small pulse after the
+    # premature beat is a pulse to mark, on its tallest bump; it's no longer a bad_ppg stretch.
     channels["ppg"] = {"mode": "point", "true_peaks": [int(x) for x in tops],
                        "accept": [[int(c) for c in a] for a in accept],
-                       "traps": []}
+                       "traps": [{"type": "the small pulse after the premature beat: a real pulse, keep its mark",
+                                  "sample": int(pvc_top)}]}
     channels["bad_ppg"] = {"mode": "segment", "traps": [], "artifacts": [
         {"type": "finger-pulse dropout (a low, smooth arc): mark it bad_ppg", "start": dropout[0],
-         "end": dropout[1], "leeway_sec": DROPOUT_LEEWAY_SEC},
-        {"type": "the weak, odd pulse after the premature beat: mark it bad_ppg", "start": weak[0],
-         "end": weak[1]}]}
+         "end": dropout[1], "leeway_sec": DROPOUT_LEEWAY_SEC}]}
 
     rsp, rsp_peaks, rsp_art, rsp_traps = _build_rsp(rng, plan, n, t)
     channels["rsp"] = {"mode": "segment", "artifacts": rsp_art, "traps": rsp_traps}

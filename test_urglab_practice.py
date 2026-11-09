@@ -3,9 +3,11 @@
 urglab certification practice (pebbl-private pebbl_urglab-practice-plan_20261101-2123.md,
 approved 2026-11-08 with its addendum A1-A8). Built in stages; this suite grows with it.
 
-  1. GOLDEN: sdi's practice is byte-for-byte what it was before urglab
-     practice existed (seed 2024; SHA-256s recorded 2026-11-08 from main
-     5fa347f, before any edit). A failure names the library versions the
+  1. GOLDEN: sdi's practice files are byte-for-byte what they were before
+     urglab practice existed (seed 2024; SHA-256s recorded 2026-11-08 from
+     main 5fa347f, before any edit); its key is key version 8's (re-recorded
+     on purpose when HLU made the small pulse after the premature beat a
+     pulse to mark in both studies). A failure names the library versions the
      hashes were recorded with, since a different neurokit2/numpy/scipy/pandas
      can change them without any PEBBL change.
   2. The scorer reads both key shapes: sdi's (one participant, no "study")
@@ -61,7 +63,9 @@ GOLDEN_SDI = {
     "sub-990_ses-run1_task-sdi_physio.json": "9fe0365bde4c7899dbaa2a1e6a9cb27945c033f8355041c2ad498ec3423b4144",
     "sub-990_ses-run2_task-sdi_physio.tsv": "53e2ca32656b1ad41b9397d89a064f29a423e170e8f3628084678dff3e370755",
     "sub-990_ses-run2_task-sdi_physio.json": "8d57fab3a897d9853acefe7eb5d961afff11e99e72ca2327bcb42d122229a170",
-    "key": "fc65ee486bc4e28cc83f2a49f1ccf8fe159aac08aaf8492e1d49c8162ce4a2bd",
+    # Key version 8 (HLU, 2026-11-08: one bad_ppg guidance for sdi and urglab), re-recorded on purpose: only the
+    # key changed (version 7's key was fc65ee48...); the four file hashes above are still version 7's.
+    "key": "0ab215da626ea70446cd34f3fc1273ad47d175c92fbb5a8490b64570a8544959",
 }
 GOLDEN_VERSIONS = {"neurokit2": "0.2.13", "numpy": "2.4.6", "scipy": "1.17.1", "pandas": "2.3.3"}
 
@@ -296,7 +300,7 @@ def check_generated(tmp):
                         "--key-copy", os.path.join(tmp, "staff", "urglab_key.json")]) == 0
     key = pc.load_key(pc.key_path_for(practice))
     assert key == pc.load_key(os.path.join(tmp, "staff", "urglab_key.json"))
-    assert key["version"] == pc.KEY_VERSIONS["urglab"] == 2 and pc.key_study(key) == "urglab"
+    assert key["version"] == pc.KEY_VERSIONS["urglab"] == 3 and pc.key_study(key) == "urglab", key["version"]
     assert key["seed"] == pu.SEED == 20261108, "version 2: one seed, because the marks are physiopipe's for it"
     computed = pu.load_machine_qc(pu.MACHINE_QC_FILE)
     for subject in pu.SUBJECTS:  # the signals are exactly the ones physiopipe computed its marks for
@@ -392,6 +396,10 @@ def check_generated(tmp):
         belt = df["rsp_raw"].to_numpy()
         arts = {a["type"].split(" (")[0].split(":")[0]: (a["start"], a["end"]) for a in rk["channels"]["rsp"]["artifacts"]}
         if subject == "990":
+            move = next(x for x in rk["channels"]["bad_ppg"]["artifacts"] if x["type"].startswith("hand movement"))
+            ppg = df["ppg"].to_numpy()
+            assert np.ptp(ppg[move["start"]:move["end"]]) > 3 * np.ptp(ppg[move["start"] - 6000:move["start"] - 1000]), \
+                "key 3: the hand movement's waves dwarf the pulses (version 2's were too small to see)"
             a, b = arts["no breathing"]
             # Only noise, after the AC coupling's small decay (under 0.15 V; breaths are about 1 V).
             assert belt[a + 8000:b - 1000].std() < 0.005 < 0.2 < belt[20000:a].std(), "the dead belt is only noise"
@@ -476,6 +484,14 @@ def check_generated(tmp):
         return review
 
     p0, p1 = perfect_review(rk0, False), perfect_review(rk1, True)
+    [small] = rk0["channels"]["ppg"]["traps"]  # key 3: the small pulse after the premature beat is a pulse
+    assert not any("weak" in a["type"] for a in rk0["channels"]["bad_ppg"]["artifacts"])
+    no_peak = copy_review(p0)
+    no_peak["channels"]["ppg"]["indices"].remove(small["sample"])
+    ok, results, lines = score("990", no_peak, ["ppg", "bad_ppg"])
+    assert not ok and any(line.startswith("  FIX  the small pulse after the premature beat") for line in lines), lines
+    no_peak["channels"]["bad_ppg"]["bad_segments"].append([small["sample"] - 300, small["sample"] + 300])
+    assert score("990", no_peak, ["ppg", "bad_ppg"])[1]["ppg"] is False, "bad_ppg instead of a peak still fails"
     assert not score("991", perfect_review(rk1, False), ["ecg"])[0], "991 reviewed unflipped"
     assert not score("990", perfect_review(rk0, True), ["ecg"])[0], "990 reviewed flipped"
     for offset in (42, 66):  # every mark on the S, or on the rebound after it
