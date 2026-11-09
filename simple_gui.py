@@ -57,6 +57,28 @@ def practice_root_for(derivatives_path):
     return os.path.join(os.path.dirname(os.path.normpath(derivatives_path)), "practice")
 
 
+def practice_subjects(practice_root):
+    """
+    The practice participants in a practice folder (its sub-<digits> folders),
+    lowest first: sdi has 990, urglab 990 and 991 (pebbl-private
+    pebbl_urglab-practice-plan_20261101-2123.md, answer 4). ["990"] when the
+    folder can't be read or holds none.
+    """
+    try:
+        names = sorted(entry[len("sub-"):] for entry in os.listdir(practice_root)
+                       if re.fullmatch(r"sub-\d+", entry) and os.path.isdir(os.path.join(practice_root, entry)))
+    except OSError:
+        names = []
+    return names or [PRACTICE_SUBJECT]
+
+
+def practice_box_label(subjects):
+    """'Practice for certification (practice participant 990)', or '... participants 990 and 991'."""
+    if len(subjects) == 1:
+        return f"Practice for certification (practice participant {subjects[0]})"
+    return f"Practice for certification (practice participants {', '.join(subjects[:-1])} and {subjects[-1]})"
+
+
 def folder_status(folder):
     """
     What the form says under the data folder (HLU, 2026-11-01): the study the
@@ -169,6 +191,15 @@ class ReviewLauncherDialog(QDialog):
         self.subject_edit = QLineEdit()
         self.subject_edit.setPlaceholderText("e.g. 001")
         form.addRow(QLabel("Subject:"), self.subject_edit)
+        # Practice with more than one practice participant (urglab: 990 and 991): which one. Hidden otherwise,
+        # so a study with one practice participant (sdi) sees the form as before.
+        self._practice_subjects = [PRACTICE_SUBJECT]
+        self.practice_subject_combo = QComboBox()
+        self.practice_subject_combo.addItems(self._practice_subjects)
+        self.practice_subject_combo.currentIndexChanged.connect(self._on_field_changed)
+        self._main_form, self._practice_subject_row = form, form.rowCount()
+        form.addRow(QLabel("Practice participant:"), self.practice_subject_combo)
+        form.setRowVisible(self._practice_subject_row, False)
 
         local_path_row = QHBoxLayout()
         self.local_path_edit = QLineEdit()
@@ -354,6 +385,9 @@ class ReviewLauncherDialog(QDialog):
         if not profile.practice:
             self.practice_checkbox.setChecked(False)
         self.practice_checkbox.setVisible(profile.practice)
+        box = self.box_path_edit.text().strip()
+        self._set_practice_subjects(practice_subjects(practice_root_for(box)) if profile.practice and box
+                                    else [PRACTICE_SUBJECT])
         if not profile.ecg_inversion_option:
             self.ecg_flip_checkbox.setChecked(False)
         self._options_form.setRowVisible(self._flip_row, profile.ecg_inversion_option)
@@ -444,17 +478,35 @@ class ReviewLauncherDialog(QDialog):
         for widget in (self.compare_a_edit, self.compare_a_label, self.compare_b_edit, self.compare_b_label):
             widget.setEnabled(is_step3)
 
+    def _set_practice_subjects(self, subjects):
+        """The practice participants offered (practice_subjects): the box's label and the participant list."""
+        if subjects == self._practice_subjects:
+            return
+        self._practice_subjects = list(subjects)
+        self.practice_checkbox.setText(practice_box_label(self._practice_subjects))
+        self.practice_subject_combo.blockSignals(True)
+        self.practice_subject_combo.clear()
+        self.practice_subject_combo.addItems(self._practice_subjects)
+        self.practice_subject_combo.blockSignals(False)
+
+    def _practice_subject(self):
+        """The practice participant chosen: the list's choice, or the only one."""
+        chosen = self.practice_subject_combo.currentText()
+        return chosen if chosen in self._practice_subjects else self._practice_subjects[0]
+
     def _apply_practice_mode(self, is_synthetic):
-        """Practice: subject 990 (locked), no Step 3; not with synthetic data. Switching it off restores the subject."""
+        """Practice: a practice participant (locked), no Step 3; not with synthetic data. Switching it off restores
+        the subject."""
         self.practice_checkbox.setEnabled(not is_synthetic)
         practice = self.practice_checkbox.isChecked() and not is_synthetic
         self.practice_note.setVisible(practice)
+        self._main_form.setRowVisible(self._practice_subject_row, practice and len(self._practice_subjects) > 1)
         was_practice = getattr(self, "_was_practice", False)
         self._was_practice = practice  # set first: changing the Step radios below re-enters this method
         if practice and not was_practice:
             self._subject_before_practice = self.subject_edit.text()
         if practice:
-            self.subject_edit.setText(PRACTICE_SUBJECT)
+            self.subject_edit.setText(self._practice_subject())
             self.subject_edit.setEnabled(False)
             if self.step3_radio.isChecked():
                 self.step2_radio.setChecked(True)
@@ -541,7 +593,8 @@ class ReviewLauncherDialog(QDialog):
                 self.error_label.setText(f"There's no practice folder at {practice_root}. Check the data folder "
                                          f"path, or ask the lab staff to set up the practice folder.")
                 return
-            box_path, subject = practice_root, PRACTICE_SUBJECT
+            self._set_practice_subjects(practice_subjects(practice_root))  # as the folder is now
+            box_path, subject = practice_root, self._practice_subject()
 
         if not box_path or not subject or (not local_path and not no_local_copy):
             self.error_label.setText(

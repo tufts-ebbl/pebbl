@@ -1365,6 +1365,75 @@ finger temperature aren't in the practice file, as in the real data.
   - at most 2 s marked outside the artifacts, with 1 s of leeway around each
     (2 s around the PPG dropout, `DROPOUT_LEEWAY_SEC`; HLU, 2026-10-05).
 
+### urglab's practice (`practice_urglab.py`)
+
+urglab has its own practice participants, made by `practice_urglab.py`
+(pebbl-private `pebbl_urglab-practice-plan_20261101-2123.md` and its
+addendum A1-A8, approved by HLU on 2026-11-08). sdi's practice is unchanged,
+and `test_urglab_practice.py` item 1 keeps it byte-for-byte the same.
+
+- **Two participants, one run each** (180 s, 1000 Hz, `task-urglab`):
+  - **sub-990** has an upright ECG with rS beats: RAs mark the small r and
+    don't tick "Flip the ECG";
+  - **sub-991** has an ECG recorded upside down: RAs tick the box.
+  
+  The key records each participant's `ecg_inverted`, and a wrong flip fails
+  ECG with a line saying what to do.
+- **Lab staff make it** with urglab's profile, which picks the generator by
+  the profile's `task`; without `--study-profile`, `make` writes sdi's:
+  ```
+  annotate_env\Scripts\python.exe practice_certification.py make --out-dir "<urglab's practice folder>" --study-profile "<urglab's data folder>\pebbl_study.toml"
+  ```
+  Then urglab's profile needs `practice = true`, which changes its SHA-256:
+  copy it to Box with plain `cp` and check it with `sha256sum`.
+- **The form** lists the practice folder's participants
+  (`simple_gui.practice_subjects`) in a "Practice participant:" row, shown
+  only when there's more than one. The score report names the participant.
+- **Physiopipe's format, from the study's own files.** The practice files
+  have the 12 columns, units, sidecar keys and reason names of physiopipe's
+  writer-made reference sidecar, `fixtures/urglab_reference_sidecar.json`.
+  Each column's Description (the RA text PEBBL prints) is copied word for
+  word into `practice_urglab.COLUMN_TEXTS`. The key records each text's
+  SHA-256, so a new text means a new urglab key version.
+  `Provenance.SourceFiles` puts each file 5 s inside its imagined recording,
+  so RSP's 20-s `filter_edge` is the tsv's first and last 15 s.
+- **The computer's marks are hand-written to imitate physiopipe's rules,**
+  including what they really miss:
+  - the breathing `flat` covers only the middle of a dead belt;
+  - `rail` guards 5 s of clear breathing around the limit;
+  - a slow drop and a held breath get no mark;
+  - `snr` and `ecg_unconfirmed` stay empty, since a 180-s file can't trigger
+    them.
+  
+  Physiopipe checks them against its own rules before HLU's pilot (A7):
+  breathing sample by sample at 1000 Hz, the other channels in writing.
+- **One key version per study:** `practice_certification.KEY_VERSIONS =
+  {"sdi": 7, "urglab": 1}`. sdi's key keeps its old shape (no `study`
+  field); urglab's has `"study": "urglab"` and `"subjects": {"990": ...,
+  "991": ...}`.
+- **Scoring additions, used only by urglab's key:**
+  - `neutral` stretches count either way: the hidden `filter_edge`, the
+    drift back after a belt step, and the PPG `rail` guard;
+  - `must_keep` machine stretches fail if removed or shortened (COR, which
+    pass 2 always applies);
+  - `trap_max_coverage_by_channel` holds COR frowns to 10%;
+  - an artifact with `"required": false` (COR's single small pop) is a MISS
+    line, not a fail.
+
+| | Fix or mark | Keep the computer's mark | Leave alone |
+|---|---|---|---|
+| ECG 990 | missed beats; seed marks on the S, the rebound after it and T waves (some T waves are taller than the r); 4 s of noise (`bad_ecg`) | lead off (`flat`) | the small r; a premature beat |
+| ECG 991 | tick Flip; missed beats; marks on T waves; 4 s of noise | lead off (`flat`) | |
+| PPG 990 | missed pulses, marks on the dicrotic wave and a slope; a hand movement and the weak pulse after the premature beat (`bad_ppg`) | the sensor at its limit (`rail`; its 3-s guard is neutral) | pulses of varying height |
+| RSP 990 (on `rsp_raw`) | extend the partial `flat` over a 40-s noise-only dead belt; mark a slow 3.5-V drop at a task event | a fast 4-V drop and return at a task event (`swing`) | a sigh |
+| RSP 991 | mark an 8-s held breath; trim `rail` to a 40-ms pop and to the belt held at its limit then jumping | | shallow breathing |
+| EDA 990 | | an electrode lift (`kleckner`), a stuck sensor (`flat`) | 5 real responses; no brief-glitch case (A5 is open) |
+| COR 990 | a pop train; a regular repeating pattern; a perfectly smooth stretch right after a spike; a single pop (a MISS if left) | a frown that reached the sensor limit (`clipped`, `clip_guard`) | frowns (10% at most), ordinary bursts, a quiet stretch that fades in gradually |
+| COR 991 | | the whole run, a dead channel (`flat_record`) | |
+
+991's PPG and EDA are clean: they're scored but not part of certification.
+COR reuses the shapes in `fixtures/cor_planted_75-140s.npz`.
+
 ## The session log
 
 Everything the tool prints during a session (the equivalent command, banners,
@@ -1804,8 +1873,27 @@ and real-data-gets-its-own-scale) and `test_real_data.py`/`test_column_subsets.p
   participant (sub-990, runs 1 and 2) and its encoded answer key, scores a
   saved review against it, and shows an RA's marks next to the key (see "RA
   certification practice" above).
+- `practice_urglab.py` — urglab's practice participants (sub-990 upright with
+  rS beats, sub-991 upside down; run 1) in physiopipe's format, and their
+  answer key; made through `practice_certification.py make --study-profile`
+  (see "urglab's practice" above).
 - `practice_report_gui.py` — the practice score window shown after each
   saved practice review, with its "Compare with the answer key" button.
+- `test_urglab_practice.py` — urglab's practice:
+  - item 1, golden: sdi's practice files and key are byte-for-byte unchanged
+    (SHA-256s recorded before urglab practice existed; a one-beat change is
+    caught);
+  - the scorer's two key shapes, the flip line, `neutral`, `must_keep`, COR's
+    10% and the participant in the report;
+  - the generated files against physiopipe's reference sidecar (keys,
+    columns, units, reason lists, Rules, Descriptions);
+  - controls: every key r/R is the top of its beat, each breathing case is
+    on the belt, PEBBL hides exactly `filter_edge`, and the display cut
+    still shows the cases;
+  - a perfect review passes; the untouched marks, saved through the real
+    Step 2 code with urglab's settings, fail where the RA has work; each
+    mistake the plan names fails;
+  - a Step 1 + Step 2 practice session for 991 through `physio_review`.
 - `test_practice_certification.py` — checks the practice participant
   against known answers:
   - both runs load through the tool's own reader; the encoded key round-trips;

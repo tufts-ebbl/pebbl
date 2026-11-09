@@ -353,6 +353,11 @@ git clone https://github.com/tufts-ebbl/pebbl.git</pre>
     <li>Natural changes in heart rate.</li></ul></div>
 </div>
 <p>The finger-pulse (PPG) guide row is <strong>off</strong> under ECG. You can turn it on in the form to check your count: every pulse comes a fraction of a second after an R peak. If a pulse has no mark before it, look in the ECG for a missed R peak. Place each peak by the ECG itself, not by the pulse: the gap between them varies a little from beat to beat (and, in studies that record the pulse on a separate device, from run to run). An early beat may make only a small pulse or none, and it's still real.</p>
+<p><strong>Flip the ECG</strong> (only in studies whose form shows the box). In most recordings each beat's tall, sharp spike points up. If the spikes point <strong>down</strong> and the T waves (the rounder bump after each beat) point down with them, the ECG was recorded upside down: tick <strong>Flip the ECG</strong> in the form, for Step 1 and Step 2. Some upright recordings have <strong>rS beats</strong>: a small upward spike (the r) followed by a deep downward one (the S), with the T wave pointing <strong>up</strong>. Don't flip those, and mark the small r, not the S or the little bump just after it. The T waves tell the two apart.</p>
+<figure>
+  <img src="img/ecg_flip_rs.png" alt="Two simulated ECGs, 4 seconds each. Left, recorded upside down: each beat's spike points down to about -1 mV and the T waves point down too; triangles under the downward spikes. Right, upright with rS beats: a small upward r spike, then a deep downward S, and T waves pointing up; triangles above the small r spikes." width="1280" height="360">
+  <figcaption>Simulated ECGs. Left: recorded upside down, so the spikes and the T waves point down; tick <em>Flip the ECG</em>. Right: upright, with rS beats: a small upward r, then a deep downward S, and T waves pointing up; don't flip it, and mark the small r. The triangles show where each beat's mark belongs.</figcaption>
+</figure>
 </div>
 
 <div class="chan">
@@ -434,11 +439,11 @@ git clone https://github.com/tufts-ebbl/pebbl.git</pre>
 
 <section id="certify">
 <h2>7. Get certified</h2>
-<p>Before you work on real data, you practice on <strong>participant 990</strong>. It's a made-up recording: a computer simulated every channel, so no real person is in it. The computer's marks on it include deliberate mistakes, and a few spots look odd but are real. PEBBL keeps an <strong>answer key</strong> with it, the gold standard for where every peak and bad stretch belongs. The key is exact because the recording was built from it. Each time you save a practice review, PEBBL compares your marks with the key.</p>
+<p>Before you work on real data, you practice on <strong>participant 990</strong> (in some studies, on 991 too: the form lists your study's practice participants). It's a made-up recording: a computer simulated every channel, so no real person is in it. The computer's marks on it include deliberate mistakes, and a few spots look odd but are real. PEBBL keeps an <strong>answer key</strong> with it, the gold standard for where every peak and bad stretch belongs. The key is exact because the recording was built from it. Each time you save a practice review, PEBBL compares your marks with the key.</p>
 <ol class="steps">
 <li>
   <h3>Tick <em>Practice for certification</em></h3>
-  <p>It's near the top of the form. PEBBL fills in subject 990 and uses the <span class="path">practice</span> folder next to your data folder. Keep your usual data folder, working folder and initials. Step 3 isn't part of practice.</p>
+  <p>It's near the top of the form. PEBBL fills in subject 990 and uses the <span class="path">practice</span> folder next to your data folder. If your study has more than one practice participant, a <strong>Practice participant</strong> list appears: practice on each one, choosing it there. Keep your usual data folder, working folder and initials. Step 3 isn't part of practice.</p>
 </li>
 <li>
   <h3>Build the ECG template (Step 1)</h3>
@@ -471,7 +476,8 @@ git clone https://github.com/tufts-ebbl/pebbl.git</pre>
   <thead><tr><th>Marks</th><th>To pass</th></tr></thead>
   <tbody>
     <tr><td>Peaks (ECG, PPG)</td><td>Every heartbeat or pulse has a mark within 20 ms (ECG) or 30 ms (PPG) of the key's, and there are no extra marks. On a two-humped pulse, either hump counts. Beats inside a stretch you correctly marked bad don't need marks. Beats in a run's first half second and last second aren't scored, so a mark there never counts as extra.</td></tr>
-    <tr><td>Bad stretches (all channels)</td><td>At least 80% of each real artifact is marked bad. Real signal that looks odd, and the computer's mistaken marks, are no more than 25% marked. In all, no more than 2 seconds are marked bad where the signal is fine. Up to 1 second on either side of a real artifact counts as part of it (2 seconds for a finger-pulse dropout).</td></tr>
+    <tr><td>Flip the ECG (studies whose form shows the box)</td><td>Ticked for an ECG recorded upside down, not ticked for an upright one. Set the wrong way, ECG doesn't pass, whatever the marks.</td></tr>
+    <tr><td>Bad stretches (all channels)</td><td>At least 80% of each real artifact is marked bad. Real signal that looks odd, and the computer's mistaken marks, are no more than 25% marked (a frown on COR: no more than 10%). In all, no more than 2 seconds are marked bad where the signal is fine. Up to 1 second on either side of a real artifact counts as part of it (2 seconds for a finger-pulse dropout). Stretches the computer marked that count whatever you do must be left as they are. A few stretches count either way, marked or not, such as the slow drift back after a breathing-belt step. A <strong>MISS</strong> line names something worth marking that doesn't stop a pass.</td></tr>
   </tbody>
 </table></div>
 <p>When every channel you practiced passes, tell the lab staff. Your score is also saved in your session log, so they can check it there.</p>

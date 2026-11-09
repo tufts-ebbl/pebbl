@@ -712,7 +712,7 @@ def _run_session(args, real_box_path, info):
     info.update(saved=saved, finished=finished, discarded=discarded)
     if args.practice and saved and result.saved_path:
         _practice_feedback(real_box_path or args.box_path, target_run, result.saved_path, target_df, sfreq,
-                           active_channels, initials, target_source.get("sidecar"))
+                           active_channels, initials, target_source.get("sidecar"), subject=args.subject)
 
     if real_box_path and saved:
         step_text = f"{', '.join(active_channels.keys())} reviewed -- {_status_text(finished)}"
@@ -734,7 +734,8 @@ def _run_session(args, real_box_path, info):
                                     value_ranges=value_ranges, snapshot=not args.practice)
 
 
-def _practice_feedback(practice_root, run, saved_path, df, sfreq, active_channels, initials, sidecar):
+def _practice_feedback(practice_root, run, saved_path, df, sfreq, active_channels, initials, sidecar,
+                       subject="990"):
     """
     Certification practice (HLU, 2026-10-04): score the review just saved
     against the answer key in the practice folder, print the report (so the
@@ -759,14 +760,15 @@ def _practice_feedback(practice_root, run, saved_path, df, sfreq, active_channel
               f"the lab staff.")
         return
     channels = pc.channels_to_score(list(active_channels))
-    passed, _results, lines = pc.score_run(key, submission, run, channels)
+    passed, _results, lines = pc.score_run(key, submission, run, channels, subject)
     print("\n" + "=" * 70)
     for line in lines:
         print(line)
     print("=" * 70 + "\n")
-    heading = f"Practice participant 990, run {run}: {', '.join(active_channels)}"
-    if practice_report_gui.show_practice_report(heading, lines, passed) and run in key.get("runs", {}):
-        pc.show_comparison(df, sfreq, key["runs"][run], submission.get("channels", {}), list(active_channels),
+    heading = f"Practice participant {subject}, run {run}: {', '.join(active_channels)}"
+    run_key = pc.run_key_for(key, subject, run)
+    if practice_report_gui.show_practice_report(heading, lines, passed) and run_key is not None:
+        pc.show_comparison(df, sfreq, run_key, submission.get("channels", {}), list(active_channels),
                            initials, sidecar)
 
 

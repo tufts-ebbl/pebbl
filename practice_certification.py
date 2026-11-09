@@ -80,6 +80,10 @@ RUNS = ("1", "2")
 KEY_VERSION = 7  # 5 (2026-10-04): neurokit2 signals, runs 1 and 2, outcome scoring, key in the practice folder
 #                 6 (2026-10-05, HLU's practice run): a textbook PVC; RSP flat hold and real clipping are artifacts
 #                 7 (2026-10-05, HLU): the weak pulse after the PVC is a bad_ppg stretch to mark, not a pulse to keep
+# One key version per study (HLU, 2026-11-08: "a change to a study's practice data bumps *that study's* key
+# version"). An sdi key has no "study" field, so its bytes don't change; urglab keys (practice_urglab.py) say
+# "study": "urglab" and hold several practice participants under "subjects".
+KEY_VERSIONS = {"sdi": KEY_VERSION, "urglab": 1}
 KEY_FILENAME = "practice_key.pebbl"
 KEY_HEADER = "PEBBL practice answer key (encoded; lab staff: practice_certification.py score)\n"
 
@@ -712,17 +716,31 @@ def score_segment_channel(ch, truth, bad_segments, criteria, n_samples):
     for art in truth["artifacts"]:
         coverage = float(marked[art["start"]:art["end"]].mean()) if art["end"] > art["start"] else 1.0
         hit = coverage >= criteria["artifact_min_coverage"]
-        ok &= hit
-        lines.append(f"  {'OK ' if hit else 'FIX'}  {art['type']} at {art['start'] / FS:.1f}-{art['end'] / FS:.1f} s: "
-                     f"{coverage:.0%} marked bad")
+        required = art.get("required", True)  # urglab COR's single small pop: a miss, not a fail (HLU, 2026-11-08)
+        ok &= hit or not required
+        lines.append(f"  {'OK ' if hit else 'FIX' if required else 'MISS'}  {art['type']} at "
+                     f"{art['start'] / FS:.1f}-{art['end'] / FS:.1f} s: {coverage:.0%} marked bad"
+                     + ("" if hit or required else " (worth marking; it doesn't stop a pass)"))
         pad = int(art.get("leeway_sec", criteria["artifact_leeway_sec"]) * FS)  # the PPG dropout: 2 s
         allowed[max(0, art["start"] - pad):min(n_samples, art["end"] + pad)] = True
+    for start, end in truth.get("neutral", []):  # neither required nor penalized (urglab: hidden or drifting)
+        allowed[max(0, start):min(n_samples, end)] = True
+    # A study may hold one channel's real events to a stricter limit (urglab COR: a frown more than 10% marked).
+    trap_limit = criteria.get("trap_max_coverage_by_channel", {}).get(ch, criteria["trap_max_coverage"])
     for trap in truth.get("traps", []):
         coverage = float(marked[trap["start"]:trap["end"]].mean())
-        clean = coverage <= criteria["trap_max_coverage"]
+        clean = coverage <= trap_limit
         ok &= clean
         lines.append(f"  {'OK ' if clean else 'FIX'}  {trap['type']} at {trap['start'] / FS:.1f} s: "
                      f"{coverage:.0%} marked bad")
+    for keep in truth.get("must_keep", []):  # machine stretches that count whatever the RA marks (urglab COR)
+        coverage = float(marked[keep["start"]:keep["end"]].mean()) if keep["end"] > keep["start"] else 1.0
+        kept = coverage >= 1.0
+        ok &= kept
+        lines.append(f"  {'OK ' if kept else 'FIX'}  the computer's mark on {keep['type']} at "
+                     f"{keep['start'] / FS:.1f}-{keep['end'] / FS:.1f} s: "
+                     + ("kept" if kept else f"only {coverage:.0%} left; leave the computer's marks as they are"))
+        allowed[max(0, keep["start"]):min(n_samples, keep["end"])] = True
     false_flag = (truth.get("machine_qc") or {}).get("false_flag")
     if false_flag:
         coverage = float(marked[false_flag["start"]:false_flag["end"]].mean())
@@ -742,7 +760,7 @@ def score_segment_channel(ch, truth, bad_segments, criteria, n_samples):
 
 
 CHANNEL_NAMES = {"ecg": "ECG", "bad_ecg": "ECG bad stretches", "ppg": "PPG", "bad_ppg": "PPG bad stretches",
-                 "rsp": "RSP", "eda": "EDA", "sbp": "SBP", "dbp": "DBP"}
+                 "rsp": "RSP", "eda": "EDA", "sbp": "SBP", "dbp": "DBP", "emg_cor": "COR"}
 
 
 def run_from_filename(path):
@@ -750,17 +768,61 @@ def run_from_filename(path):
     return match.group(1) if match else None
 
 
-def score_run(key, submission, run, channels=None):
+def subject_from_filename(path):
+    match = re.match(r"sub-([A-Za-z0-9]+)_", os.path.basename(path))
+    return match.group(1) if match else None
+
+
+def key_study(key):
+    """The study a key belongs to: an sdi key has no 'study' field."""
+    return key.get("study", "sdi")
+
+
+def key_subjects(key):
+    """{practice participant: {"runs": {...}, and for urglab "ecg_inverted"}} for any key."""
+    if "subjects" in key:
+        return key["subjects"]
+    return {str(key.get("subject", PRACTICE_SUBJECT)): {"runs": key.get("runs", {})}}
+
+
+def run_key_for(key, subject, run):
+    """One practice run's answers, or None."""
+    return ((key_subjects(key).get(str(subject)) or {}).get("runs") or {}).get(run)
+
+
+def _flip_line(entry, reviewed):
+    """(ok, line) for 'Flip the ECG' on a participant whose key says how the ECG was recorded; else None."""
+    if "ecg_inverted" not in entry:
+        return None
+    flipped = bool((reviewed.get("ecg") or {}).get("inverted"))
+    if flipped == entry["ecg_inverted"]:
+        return True, f"  OK   Flip the ECG: {'ticked' if flipped else 'not ticked'}"
+    if entry["ecg_inverted"]:
+        return False, ("  FIX  Flip the ECG: this ECG is upside down (its main spikes point down). Tick 'Flip the "
+                       "ECG' and start the ECG over")
+    return False, ("  FIX  Flip the ECG: this ECG is upright, with rS beats (a small upward r, then a deep "
+                   "downward S). Untick 'Flip the ECG', start the ECG over, and mark the small r")
+
+
+def score_run(key, submission, run, channels=None, subject=None):
     """(overall, {channel: passed}, report lines) for one run's saved review."""
-    if key.get("version") != KEY_VERSION or run not in key.get("runs", {}):
+    study = key_study(key)
+    subjects = key_subjects(key)
+    if subject is None:
+        subject = next(iter(subjects)) if len(subjects) == 1 else PRACTICE_SUBJECT
+    subject = str(subject)
+    expected = KEY_VERSIONS.get(study)
+    run_key = run_key_for(key, subject, run)
+    if key.get("version") != expected or run_key is None:
         return False, {}, [f"This answer key (version {key.get('version')}) doesn't match this version of PEBBL "
-                           f"(version {KEY_VERSION}) or has no run {run}. Ask the lab staff to make the practice "
-                           f"folder again."]
-    run_key = key["runs"][run]
+                           f"(version {expected}) or has no run {run} for participant {subject}. Ask the lab staff "
+                           f"to make the practice folder again."]
     reviewed = submission.get("channels", {})
     wanted = channels or [ch for ch in run_key["channels"] if ch in reviewed]
     criteria = key.get("criteria", PASS_CRITERIA)
-    results, lines = {}, [f"Practice score: participant 990, run {run}, initials {submission.get('initials', '?')}"]
+    flip = _flip_line(subjects[subject], reviewed) if "ecg" in wanted and "ecg" in reviewed else None
+    results, lines = {}, [f"Practice score: participant {subject}, run {run}, initials "
+                          f"{submission.get('initials', '?')}"]
     for ch in wanted:
         truth = run_key["channels"].get(ch)
         if truth is None:
@@ -781,6 +843,9 @@ def score_run(key, submission, run, channels=None):
         else:
             ok, ch_lines = score_segment_channel(ch, truth, reviewed[ch].get("bad_segments", []), criteria,
                                                  run_key["n_samples"])
+        if ch == "ecg" and flip is not None:  # a wrong flip fails ECG whatever the marks
+            ok = ok and flip[0]
+            ch_lines = [flip[1]] + ch_lines
         results[ch] = ok
         lines += ["", f"{name}: {'PASS' if ok else 'NOT YET'}"] + ch_lines
     overall = bool(results) and all(results.values())
@@ -789,13 +854,14 @@ def score_run(key, submission, run, channels=None):
     return overall, results, lines
 
 
-def score(key_path, annotations_path, channels=None, run=None):
+def score(key_path, annotations_path, channels=None, run=None, subject=None):
     """Command-line scoring: prints the report and returns (overall, results)."""
     key = load_key(key_path)
     with open(annotations_path) as f:
         submission = json.load(f)
     run = run or run_from_filename(annotations_path) or "1"
-    overall, results, lines = score_run(key, submission, run, channels)
+    subject = subject or subject_from_filename(annotations_path)
+    overall, results, lines = score_run(key, submission, run, channels, subject)
     print("\n".join(lines))
     return overall, results
 
@@ -872,18 +938,33 @@ def main(argv=None):
     make_p.add_argument("--seed", type=int, default=None, help="Random seed (default: a fresh random one).")
     make_p.add_argument("--key-copy", default=None, help="Also write a plain-JSON copy of the key here "
                                                          "(keep it outside the practice folder).")
+    make_p.add_argument("--study-profile", default=None,
+                        help="The study's pebbl_study.toml: urglab's makes urglab's practice participants (sub-990 "
+                             "and sub-991, practice_urglab.py). Without it, sdi's sub-990.")
     score_p = sub.add_parser("score", help="Score an RA's saved annotations against the answer key.")
     score_p.add_argument("--key", required=True, help="practice_key.pebbl (or a plain-JSON copy).")
     score_p.add_argument("--annotations", required=True, help="The RA's *_annotations_<initials>.json.")
     score_p.add_argument("--run", default=None, help="1 or 2 (default: from the file name).")
+    score_p.add_argument("--subject", default=None, help="The practice participant, e.g. 991 (default: from the "
+                                                         "file name).")
     score_p.add_argument("--channels", default=None, help="Comma-separated channels to score (default: every "
                                                           "channel in the RA's file).")
     args = parser.parse_args(argv)
     if args.command == "make":
-        make(args.out_dir, args.seed, args.key_copy)
+        task = "sdi"
+        if args.study_profile:
+            import study_profile
+            task = study_profile.load(path=args.study_profile).task
+        if task == "urglab":
+            import practice_urglab
+            practice_urglab.make(args.out_dir, args.seed, args.key_copy)
+        elif task == "sdi":
+            make(args.out_dir, args.seed, args.key_copy)
+        else:
+            raise SystemExit(f"PEBBL has no certification practice for the study with task '{task}'.")
         return 0
     channels = [c.strip() for c in args.channels.split(",")] if args.channels else None
-    overall, _ = score(args.key, args.annotations, channels, args.run)
+    overall, _ = score(args.key, args.annotations, channels, args.run, args.subject)
     return 0 if overall else 1
 
 

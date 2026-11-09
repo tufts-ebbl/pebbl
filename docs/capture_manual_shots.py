@@ -1,11 +1,11 @@
 """
 Capture PEBBL screens from SYNTHETIC data for the RA manual (offscreen; no windows appear).
 
-Writes docs/img/form.png, ecg_viewer.png, eda_viewer.png, rsp_hold.png, rsp_clip.png, rsp_raw_swing.png,
-summary.png and
+Writes docs/img/form.png, ecg_viewer.png, ecg_flip_rs.png, eda_viewer.png, rsp_hold.png, rsp_clip.png,
+rsp_raw_swing.png, summary.png and
 practice_report.png, for developers updating the manual. Run from the tool folder, with Windows fonts for Qt:
 
-    QT_QPA_FONTDIR=C:/Windows/Fonts annotate_env/Scripts/python.exe docs/capture_manual_shots.py [form ecg eda rsp rspraw summary report]
+    QT_QPA_FONTDIR=C:/Windows/Fonts annotate_env/Scripts/python.exe docs/capture_manual_shots.py [form ecg ecgflip eda rsp rspraw summary report]
 
 The RSP pictures show the RSP rule (HLU, 2026-10-05) on synthetic breathing, at times unlike the practice
 recordings': a held breath and clipped tops are bad; a sigh and shallow breathing are real.
@@ -40,7 +40,7 @@ from channel_config import CHANNELS  # noqa: E402
 from physio_io import generate_synthetic_demo  # noqa: E402
 from simple_gui import ReviewLauncherDialog  # noqa: E402
 
-which = sys.argv[1:] or ["form", "ecg", "eda", "rsp", "rspraw", "summary", "report"]
+which = sys.argv[1:] or ["form", "ecg", "ecgflip", "eda", "rsp", "rspraw", "summary", "report"]
 ORIG_PLOT = mne.io.RawArray.plot
 RSP_BAD = {}  # (onset, duration) in seconds of each RSP picture's bad_rsp stretch, set by its edit
 
@@ -197,6 +197,46 @@ def mark_bad_rsp(key):
     return lambda raw: raw.annotations.append(*RSP_BAD[key], "bad_rsp")
 
 
+def shot_ecgflip():
+    """
+    Two synthetic ECGs side by side (urglab practice plan, 2026-11-08; HLU: "define rS beat"): one recorded
+    upside down (tick Flip the ECG) and an upright one with rS beats (mark the small r). Drawn as plain traces,
+    not viewer screenshots: at the viewer's scale the deep S runs off the row and the marks hide the small r.
+    Beats from practice_urglab's shapes, 4 s at 70 beats a minute, so no practice recording's times appear.
+    """
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import practice_urglab as pu
+    fs, seconds = 1000, 4.0
+    t = np.arange(int(seconds * fs)) / fs
+    beats = np.arange(0.45, seconds - 0.4, 60 / 70)
+    rng = np.random.default_rng(5)
+    panels = [  # the manual's caption explains them (the T waves are the cue)
+        ("Recorded upside down: tick Flip the ECG",
+         -pu._waves(t, len(t), [(b, pu.UPRIGHT_BEAT) for b in beats])),
+        ("Upright, with rS beats: don't flip; mark the small r",
+         pu._waves(t, len(t), [(b, pu.RS_BEAT) for b in beats])),
+    ]
+    fig, axes = plt.subplots(1, 2, figsize=(12.8, 3.6), dpi=100, sharey=True)
+    for ax, (title, ecg) in zip(axes, panels):
+        ecg = ecg + rng.normal(0, 0.008, len(t))
+        ax.plot(t, ecg, color="#8e1f86", linewidth=1.2)
+        for b in beats:
+            i = int(round(b * fs))
+            ax.plot(t[i], ecg[i] + (0.12 if ecg[i] >= 0 else -0.12), marker="v" if ecg[i] >= 0 else "^",
+                    color="#1f5fa8", markersize=8)
+        ax.set_title(title, fontsize=12, loc="left")
+        ax.set_xlabel("Time (s)")
+        ax.axhline(0, color="#cccccc", linewidth=0.8, zorder=0)
+        for side in ("top", "right"):
+            ax.spines[side].set_visible(False)
+    axes[0].set_ylabel("ECG (mV)")
+    fig.tight_layout()
+    fig.savefig(os.path.join(OUT, "ecg_flip_rs.png"))
+    plt.close(fig)
+
+
 def shot_summary():
     dlg = session_summary_gui.SessionSummaryDialog(
         "sub-001_ses-run1_task-sdi · ECG · abc",
@@ -245,6 +285,8 @@ if "report" in which:
     shot_report()
 if "ecg" in which:
     viewer_shot("ecg_viewer.png", ["ecg"], 20)
+if "ecgflip" in which:
+    shot_ecgflip()
 if "eda" in which:
     viewer_shot("eda_viewer.png", ["eda"], 20, before=mark_bad_eda, edit_df=eda_artifact)
 if "rsp" in which:

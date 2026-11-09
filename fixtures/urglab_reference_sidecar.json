@@ -1,0 +1,2665 @@
+{
+  "SamplingFrequency": 1000,
+  "StartTime": -20.0,
+  "Columns": [
+    "ecg",
+    "ppg",
+    "rsp",
+    "eda",
+    "emg_cor",
+    "emg_cor_env",
+    "ecg_peaks",
+    "ppg_peaks",
+    "rsp_peaks",
+    "eda_peaks",
+    "event",
+    "rsp_raw"
+  ],
+  "ecg": {
+    "Units": "mV",
+    "Description": "The heart's electrical signal (ECG), filtered to remove electrical noise from the room. Each sharp spike is one heartbeat. Stretches where the signal is flat (no heartbeat recorded) are already marked as bad.",
+    "TechnicalDescription": "ECG - ECG100C, rate-converted to 1000 Hz (Kaiser FIR, 450-500 Hz, 60 dB); cleaned at 1000 Hz: Butterworth high-pass 0.5 Hz (order 4), notches at 60 Hz and harmonics below 40 Hz, Butterworth low-pass 40 Hz (order 4), all zero-phase (physiopipe.ecg.clean_ecg, D1a, final); whole file filtered, then trimmed. MachineQC.ecg: flat = 0.5-s windows with SD < 0.001 mV (ecg_flat_mask, physioProcess's Bio-SP flat test). No ECG edge flag in pass 1: positions of file edges and junctions are in Provenance.SourceFiles for pass 2's 5.0-s rule."
+  },
+  "ppg": {
+    "Units": "V",
+    "Description": "Finger pulse signal, filtered so that each heartbeat's pulse is easy to see. Stretches are already marked as bad where the pulse is too small to see, the sensor hit its limit, or the pulses do not follow the heartbeats in the ECG; check each one. Pulse marks inside a bad stretch are not shown: if you delete a bad stretch, add the pulse marks there by hand.",
+    "TechnicalDescription": "PPG - PPG100C, rate-converted to 1000 Hz (Kaiser FIR, 450-500 Hz, 60 dB); neurokit 'elgendi' clean (Butterworth band-pass 0.5-8 Hz, order 3, zero-phase); whole file filtered, then trimmed. MachineQC.ppg: window_rule (10-s windows, peak-to-peak >= max(0.05 x (p95 - p5), 0.05 V)), rail (|raw| >= 9.95 V, +-3 s), ecg_coupling (peaks not following the ECG QRS at the participant's own delay; tested only in windows where the ECG is usable: no flat ECG sample, QRS rate 40-150/min, beat consistency >= 0.70 (physiopipe.ecg.ecg_usable); not tested without an ECG). No PPG edge flag in pass 1 (pass 2's 5.0-s rule)."
+  },
+  "rsp": {
+    "Units": "V",
+    "Description": "Breathing belt around the participant's chest. Review it on rsp_raw, the belt as recorded; this filtered copy is for analysis. Each rise and fall is one breath. Some stretches are already marked as bad: where the belt is flat or at its limit, and where it makes a sudden step much faster and bigger than a breath. Remove a mark where ordinary breathing is clearly visible. Then mark (1) any stretch with no breathing in it, a flat line or only fine noise, from where the breathing stops to where it returns, even where part of it is already marked; (2) any other large sudden drop or jump that is not breathing, often at a task event. If the belt never follows the breathing seen in the heartbeat, the whole recording is marked bad; leave that mark.",
+    "TechnicalDescription": "RSP - RSP100C, rate-converted to 1000 Hz (Kaiser FIR, 450-500 Hz, 60 dB); Butterworth 0.07-1 Hz (order 2), then neurokit 'khodadad2018' clean (0.05-3 Hz, order 2), zero-phase; whole file filtered, then trimmed. MachineQC.rsp reasons: flat, flat_raw, snr, rail (|raw| >= 9.95 V, +-5 s), swing (on the raw belt low-passed at 5 Hz: a speed burst at most 0.25 s wide at half its height that moves the belt by more than 1.5 x the median half-breath of the machine extrema in the trim; +-1 s; not tested below 0.05 V; physiopipe.rsp.swing_events), filter_edge (20 s at each file edge), ecg_unconfirmed (record-level surrogate coherence test over the trim, leaving out samples where the ECG is not usable (physiopipe.ecg.ecg_usable); physiopipe.rsp)."
+  },
+  "eda": {
+    "Units": "microsiemens",
+    "Description": "Skin conductance (the sweat response). Rises lasting a few seconds are normal responses. Stretches are already marked as bad where the signal is out of range, flat, or changes impossibly fast, and in the first and last second of each recording; brief glitches are not marked.",
+    "TechnicalDescription": "SCL - GSR100C, rate-converted to 1000 Hz (Kaiser FIR, 450-500 Hz, 60 dB); neurokit 'neurokit' clean (Butterworth low-pass 3 Hz, order 4, zero-phase), no comb, no detrend (slope and intercept in Pass2Inputs); whole file filtered, then trimmed. MachineQC.eda reasons: kleckner (rules 1, 2, 4; rule-4 gaps fixed), ceiling, floor, flat, filter_edge (1 s at each file edge), too_short."
+  },
+  "emg_cor": {
+    "Units": "mV",
+    "Description": "Muscle activity over the eyebrow (corrugator, the frown muscle), filtered to keep the muscle signal and remove electrical noise. Bursts are normal, including large ones and ones with movement on other channels; so are quiet stretches and held frowns (activity lasting seconds that builds and fades, with fine texture after it). Stretches the computer found are already marked: leave them; they count whatever you do. Mark as bad: (1) electrode pops: on emg_cor_full, sharp spikes far taller than the bursts around them, often in trains; mark from just before the first spike to the end of the ringing; (2) a regular, repeating pattern lasting several seconds that is not already marked; (3) on emg_cor, a stretch that is perfectly smooth (no fine texture), only when it begins right after a sudden step, a spike or the sudden end of a band; mark it up to the next sudden change or the end of the recording. Do not mark a stretch because it is quiet.",
+    "TechnicalDescription": "COR - ERS100C at its native rate (2000 Hz or 10000 Hz): notches at 60 Hz and harmonics to 500 Hz, Butterworth high-pass 20 Hz (order 4), Kaiser FIR anti-alias (450-500 Hz, 60 dB), decimated to 1000 Hz; mirror-padded, zero-phase; band 20-450 Hz. MachineQC.emg_cor reasons (emg_qc v6, 2-s windows): nonfinite, nonfinite_guard, clipped (|raw| >= 2 mV x 0.999), clip_guard (1.5 s), mains (line power > 1 x the rest of 20-250 Hz after notching), line (narrowband peak >= 10 dB above its neighbourhood in 30-450 Hz away from the mains harmonics and >= 0.005 mV RMS, in >= 3 of the 5 windows centred on a window), filter_edge (1.5 s at each file edge), flat_record (the whole file when >= 0.9 of the windows overlapping the trim have band-limited SD < 0.001 mV), clipped_record (the whole file when >= 0.9 of the trim's samples are clipped or clip_guard), too_short; native spans widened outward to whole 1000-Hz rows. FlatShare and ClippedShare are in Pass2Inputs."
+  },
+  "emg_cor_env": {
+    "Units": "mV",
+    "Description": "The size of the eyebrow muscle activity, smoothed, for analysis. Not reviewed.",
+    "TechnicalDescription": "Mean rectified corrugator EMG in the 20-450 Hz band, centred 100-ms moving average at the native rate, decimated to 1000 Hz (physiopipe.emg.emg_envelope)."
+  },
+  "ecg_peaks": {
+    "Units": "boolean",
+    "Description": "Heartbeat marks found automatically, used as the starting marks when building the ECG template; the review tool then finds its own.",
+    "TechnicalDescription": "R peaks, 0/1: neurokit nabian2018 detections snapped onto the ECG maximum (+-2 samples), 300-ms refractory pruning, systole correct_peaks (4 iterations); Kubios as flags only (D1b; MachineQC.Corrections.ecg); detected on the whole file, then trimmed; machine output pending RA review."
+  },
+  "ppg_peaks": {
+    "Units": "boolean",
+    "Description": "Marks at the top of each pulse, found automatically, to be checked and corrected by RAs.",
+    "TechnicalDescription": "PPG systolic peaks, 0/1: neurokit 'elgendi' detection, then systole correct_peaks (4 iterations); detected on the whole file, then trimmed; machine output pending RA review."
+  },
+  "rsp_peaks": {
+    "Units": "boolean",
+    "Description": "Marks at the top of each breath, found automatically. Not reviewed by RAs, who mark bad stretches of the breathing signal instead.",
+    "TechnicalDescription": "Breath peaks, 0/1: neurokit rsp_peaks 'khodadad2018', amplitude_min 0.3; troughs in Pass2Inputs; machine output, not reviewed."
+  },
+  "eda_peaks": {
+    "Units": "boolean",
+    "Description": "Skin-conductance responses found automatically (rises of at least 0.05 microsiemens lasting at least half a second). Not reviewed by RAs.",
+    "TechnicalDescription": "SCR peaks, 0/1, detector K3: phasic maxima with amplitude >= 0.05 uS, clean rise >= 0.05 uS, rise time >= 0.5 s; whole file, then trimmed; the SCR table is in Pass2Inputs; machine output, not reviewed."
+  },
+  "event": {
+    "Units": "code",
+    "Description": "Task code at each moment. 0 = no code. 50 = resting baseline. Trial codes have two digits: the first is the condition (1 = urgent, 2 = not urgent), the second the phase (0 = fixation, 1 = urgency message, 2 = planning, 3 = tracing, 4 = DR grid, 5 = CT grid). Codes 10, 20 and 50 also appear as half-second test pulses when the recording is checked.",
+    "TechnicalDescription": "Event code at each row from the decoded event table (Events.Rows): a row's code over its span, 0 where no code is set; a transitional state takes the code that follows it; sampled at each 1000-Hz row's event-channel sample (row m <-> event sample m x event_rate / 1000)."
+  },
+  "rsp_raw": {
+    "Units": "V",
+    "Description": "The breathing belt as recorded, without the breathing filter. Use it to judge large swings: a sudden drop or jump much bigger than a breath, often at a task event, then a slow drift back, is not breathing. Bad stretches marked for breathing cover this row too.",
+    "TechnicalDescription": "RSP - RSP100C, rate-converted to 1000 Hz (Kaiser FIR, 450-500 Hz, 60 dB); no further filtering. Shown for review; the analysis signal is rsp. Shares rsp's MachineQC."
+  },
+  "Events": {
+    "Codebook": {
+      "bit_order": "msb_first",
+      "baseline_code": 50,
+      "cleared_code": 0,
+      "test_burst_codes": [
+        10,
+        20,
+        50
+      ],
+      "test_burst_pulse_s": 0.5,
+      "test_burst_spacing_s": 1.0,
+      "phase_presented_min_ms": 50.0,
+      "conditions": {
+        "1": "Urgent",
+        "2": "Not Urgent"
+      },
+      "phases": {
+        "0": "fixation",
+        "1": "urgency_message",
+        "2": "planning",
+        "3": "tracing",
+        "4": "dr_grid",
+        "5": "ct_grid"
+      }
+    },
+    "Rows": [
+      {
+        "Role": "task",
+        "OnsetRow": 20000,
+        "OffsetRow": 80000,
+        "OnsetEventSample": 250000,
+        "OffsetEventSample": 850000,
+        "Code": 50,
+        "Kind": "baseline",
+        "Condition": null,
+        "Phase": null,
+        "Trial": null,
+        "Block": null,
+        "TrialComplete": null,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 82000,
+        "OffsetRow": 84000,
+        "OnsetEventSample": 870000,
+        "OffsetEventSample": 890000,
+        "Code": 10,
+        "Kind": "phase",
+        "Condition": "Urgent",
+        "Phase": "fixation",
+        "Trial": 1,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 84000,
+        "OffsetRow": 87000,
+        "OnsetEventSample": 890000,
+        "OffsetEventSample": 920000,
+        "Code": 11,
+        "Kind": "phase",
+        "Condition": "Urgent",
+        "Phase": "urgency_message",
+        "Trial": 1,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 87000,
+        "OffsetRow": 92000,
+        "OnsetEventSample": 920000,
+        "OffsetEventSample": 970000,
+        "Code": 12,
+        "Kind": "phase",
+        "Condition": "Urgent",
+        "Phase": "planning",
+        "Trial": 1,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 92000,
+        "OffsetRow": 107000,
+        "OnsetEventSample": 970000,
+        "OffsetEventSample": 1120000,
+        "Code": 13,
+        "Kind": "phase",
+        "Condition": "Urgent",
+        "Phase": "tracing",
+        "Trial": 1,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 107000,
+        "OffsetRow": 111000,
+        "OnsetEventSample": 1120000,
+        "OffsetEventSample": 1160000,
+        "Code": 14,
+        "Kind": "phase",
+        "Condition": "Urgent",
+        "Phase": "dr_grid",
+        "Trial": 1,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 111000,
+        "OffsetRow": 115000,
+        "OnsetEventSample": 1160000,
+        "OffsetEventSample": 1200000,
+        "Code": 15,
+        "Kind": "phase",
+        "Condition": "Urgent",
+        "Phase": "ct_grid",
+        "Trial": 1,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 116000,
+        "OffsetRow": 118000,
+        "OnsetEventSample": 1210000,
+        "OffsetEventSample": 1230000,
+        "Code": 20,
+        "Kind": "phase",
+        "Condition": "Not Urgent",
+        "Phase": "fixation",
+        "Trial": 2,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 118000,
+        "OffsetRow": 121000,
+        "OnsetEventSample": 1230000,
+        "OffsetEventSample": 1260000,
+        "Code": 21,
+        "Kind": "phase",
+        "Condition": "Not Urgent",
+        "Phase": "urgency_message",
+        "Trial": 2,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 121000,
+        "OffsetRow": 126000,
+        "OnsetEventSample": 1260000,
+        "OffsetEventSample": 1310000,
+        "Code": 22,
+        "Kind": "phase",
+        "Condition": "Not Urgent",
+        "Phase": "planning",
+        "Trial": 2,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 126000,
+        "OffsetRow": 141000,
+        "OnsetEventSample": 1310000,
+        "OffsetEventSample": 1460000,
+        "Code": 23,
+        "Kind": "phase",
+        "Condition": "Not Urgent",
+        "Phase": "tracing",
+        "Trial": 2,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 141000,
+        "OffsetRow": 145000,
+        "OnsetEventSample": 1460000,
+        "OffsetEventSample": 1500000,
+        "Code": 24,
+        "Kind": "phase",
+        "Condition": "Not Urgent",
+        "Phase": "dr_grid",
+        "Trial": 2,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 145000,
+        "OffsetRow": 149000,
+        "OnsetEventSample": 1500000,
+        "OffsetEventSample": 1540000,
+        "Code": 25,
+        "Kind": "phase",
+        "Condition": "Not Urgent",
+        "Phase": "ct_grid",
+        "Trial": 2,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 150000,
+        "OffsetRow": 152000,
+        "OnsetEventSample": 1550000,
+        "OffsetEventSample": 1570000,
+        "Code": 10,
+        "Kind": "phase",
+        "Condition": "Urgent",
+        "Phase": "fixation",
+        "Trial": 3,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 152000,
+        "OffsetRow": 155000,
+        "OnsetEventSample": 1570000,
+        "OffsetEventSample": 1600000,
+        "Code": 11,
+        "Kind": "phase",
+        "Condition": "Urgent",
+        "Phase": "urgency_message",
+        "Trial": 3,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 155000,
+        "OffsetRow": 160000,
+        "OnsetEventSample": 1600000,
+        "OffsetEventSample": 1650000,
+        "Code": 12,
+        "Kind": "phase",
+        "Condition": "Urgent",
+        "Phase": "planning",
+        "Trial": 3,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 160000,
+        "OffsetRow": 175000,
+        "OnsetEventSample": 1650000,
+        "OffsetEventSample": 1800000,
+        "Code": 13,
+        "Kind": "phase",
+        "Condition": "Urgent",
+        "Phase": "tracing",
+        "Trial": 3,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 175000,
+        "OffsetRow": 179000,
+        "OnsetEventSample": 1800000,
+        "OffsetEventSample": 1840000,
+        "Code": 14,
+        "Kind": "phase",
+        "Condition": "Urgent",
+        "Phase": "dr_grid",
+        "Trial": 3,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 179000,
+        "OffsetRow": 183000,
+        "OnsetEventSample": 1840000,
+        "OffsetEventSample": 1880000,
+        "Code": 15,
+        "Kind": "phase",
+        "Condition": "Urgent",
+        "Phase": "ct_grid",
+        "Trial": 3,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 184000,
+        "OffsetRow": 186000,
+        "OnsetEventSample": 1890000,
+        "OffsetEventSample": 1910000,
+        "Code": 20,
+        "Kind": "phase",
+        "Condition": "Not Urgent",
+        "Phase": "fixation",
+        "Trial": 4,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 186000,
+        "OffsetRow": 189000,
+        "OnsetEventSample": 1910000,
+        "OffsetEventSample": 1940000,
+        "Code": 21,
+        "Kind": "phase",
+        "Condition": "Not Urgent",
+        "Phase": "urgency_message",
+        "Trial": 4,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 189000,
+        "OffsetRow": 194000,
+        "OnsetEventSample": 1940000,
+        "OffsetEventSample": 1990000,
+        "Code": 22,
+        "Kind": "phase",
+        "Condition": "Not Urgent",
+        "Phase": "planning",
+        "Trial": 4,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 194000,
+        "OffsetRow": 209000,
+        "OnsetEventSample": 1990000,
+        "OffsetEventSample": 2140000,
+        "Code": 23,
+        "Kind": "phase",
+        "Condition": "Not Urgent",
+        "Phase": "tracing",
+        "Trial": 4,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 209000,
+        "OffsetRow": 213000,
+        "OnsetEventSample": 2140000,
+        "OffsetEventSample": 2180000,
+        "Code": 24,
+        "Kind": "phase",
+        "Condition": "Not Urgent",
+        "Phase": "dr_grid",
+        "Trial": 4,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 213000,
+        "OffsetRow": 217000,
+        "OnsetEventSample": 2180000,
+        "OffsetEventSample": 2220000,
+        "Code": 25,
+        "Kind": "phase",
+        "Condition": "Not Urgent",
+        "Phase": "ct_grid",
+        "Trial": 4,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 218000,
+        "OffsetRow": 220000,
+        "OnsetEventSample": 2230000,
+        "OffsetEventSample": 2250000,
+        "Code": 10,
+        "Kind": "phase",
+        "Condition": "Urgent",
+        "Phase": "fixation",
+        "Trial": 5,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 220000,
+        "OffsetRow": 223000,
+        "OnsetEventSample": 2250000,
+        "OffsetEventSample": 2280000,
+        "Code": 11,
+        "Kind": "phase",
+        "Condition": "Urgent",
+        "Phase": "urgency_message",
+        "Trial": 5,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 223000,
+        "OffsetRow": 228000,
+        "OnsetEventSample": 2280000,
+        "OffsetEventSample": 2330000,
+        "Code": 12,
+        "Kind": "phase",
+        "Condition": "Urgent",
+        "Phase": "planning",
+        "Trial": 5,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 228000,
+        "OffsetRow": 243000,
+        "OnsetEventSample": 2330000,
+        "OffsetEventSample": 2480000,
+        "Code": 13,
+        "Kind": "phase",
+        "Condition": "Urgent",
+        "Phase": "tracing",
+        "Trial": 5,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 243000,
+        "OffsetRow": 247000,
+        "OnsetEventSample": 2480000,
+        "OffsetEventSample": 2520000,
+        "Code": 14,
+        "Kind": "phase",
+        "Condition": "Urgent",
+        "Phase": "dr_grid",
+        "Trial": 5,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 247000,
+        "OffsetRow": 251000,
+        "OnsetEventSample": 2520000,
+        "OffsetEventSample": 2560000,
+        "Code": 15,
+        "Kind": "phase",
+        "Condition": "Urgent",
+        "Phase": "ct_grid",
+        "Trial": 5,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 252000,
+        "OffsetRow": 254000,
+        "OnsetEventSample": 2570000,
+        "OffsetEventSample": 2590000,
+        "Code": 20,
+        "Kind": "phase",
+        "Condition": "Not Urgent",
+        "Phase": "fixation",
+        "Trial": 6,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 254000,
+        "OffsetRow": 257000,
+        "OnsetEventSample": 2590000,
+        "OffsetEventSample": 2620000,
+        "Code": 21,
+        "Kind": "phase",
+        "Condition": "Not Urgent",
+        "Phase": "urgency_message",
+        "Trial": 6,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 257000,
+        "OffsetRow": 262000,
+        "OnsetEventSample": 2620000,
+        "OffsetEventSample": 2670000,
+        "Code": 22,
+        "Kind": "phase",
+        "Condition": "Not Urgent",
+        "Phase": "planning",
+        "Trial": 6,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 262000,
+        "OffsetRow": 277000,
+        "OnsetEventSample": 2670000,
+        "OffsetEventSample": 2820000,
+        "Code": 23,
+        "Kind": "phase",
+        "Condition": "Not Urgent",
+        "Phase": "tracing",
+        "Trial": 6,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 277000,
+        "OffsetRow": 281000,
+        "OnsetEventSample": 2820000,
+        "OffsetEventSample": 2860000,
+        "Code": 24,
+        "Kind": "phase",
+        "Condition": "Not Urgent",
+        "Phase": "dr_grid",
+        "Trial": 6,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      },
+      {
+        "Role": "task",
+        "OnsetRow": 281000,
+        "OffsetRow": 285000,
+        "OnsetEventSample": 2860000,
+        "OffsetEventSample": 2900000,
+        "Code": 25,
+        "Kind": "phase",
+        "Condition": "Not Urgent",
+        "Phase": "ct_grid",
+        "Trial": 6,
+        "Block": null,
+        "TrialComplete": true,
+        "Flags": ""
+      }
+    ],
+    "Behaviour": null
+  },
+  "MachineQC": {
+    "CoordinateSpace": "tsv row index at SamplingFrequency; segments are [start, end)",
+    "Channels": {
+      "ecg": {
+        "BadSegments": [],
+        "SegmentsByReason": {
+          "flat": []
+        },
+        "Rule": "Bad where the cleaned ECG is flat (0.5-s windows from each file's first sample with SD < 0.001 mV). junction: the one-sample join of two files. processing_failed: the channel could not be processed.",
+        "ProportionBad": 0.0
+      },
+      "ppg": {
+        "BadSegments": [],
+        "SegmentsByReason": {
+          "window_rule": [],
+          "rail": [],
+          "ecg_coupling": []
+        },
+        "Rule": "Bad where any reason holds: window_rule (pulse too small in a 10-s window), rail (within 3 s of the sensor limit), ecg_coupling (pulses do not follow the ECG's heartbeats; tested only where the ECG is usable). junction and processing_failed as for every channel.",
+        "ProportionBad": 0.0
+      },
+      "rsp": {
+        "BadSegments": [
+          [
+            0,
+            15000
+          ],
+          [
+            35000,
+            59000
+          ],
+          [
+            90888,
+            93692
+          ],
+          [
+            135958,
+            147293
+          ],
+          [
+            173996,
+            176101
+          ],
+          [
+            193000,
+            221000
+          ],
+          [
+            226987,
+            229590
+          ],
+          [
+            264003,
+            274037
+          ],
+          [
+            290000,
+            305000
+          ]
+        ],
+        "SegmentsByReason": {
+          "flat": [
+            [
+              35000,
+              59000
+            ],
+            [
+              201000,
+              203000
+            ],
+            [
+              211000,
+              213000
+            ]
+          ],
+          "flat_raw": [
+            [
+              193000,
+              221000
+            ]
+          ],
+          "snr": [],
+          "rail": [
+            [
+              135958,
+              147293
+            ],
+            [
+              264003,
+              274037
+            ]
+          ],
+          "swing": [
+            [
+              90888,
+              93692
+            ],
+            [
+              139887,
+              144003
+            ],
+            [
+              173996,
+              176101
+            ],
+            [
+              226987,
+              229590
+            ],
+            [
+              268031,
+              270105
+            ]
+          ],
+          "filter_edge": [
+            [
+              0,
+              15000
+            ],
+            [
+              290000,
+              305000
+            ]
+          ],
+          "ecg_unconfirmed": []
+        },
+        "Rule": "Bad where any reason holds: flat, flat_raw (dead belt, 2-s windows), snr (20-s windows), rail (within 5 s of the sensor limit), swing (within 1 s of a sudden belt step faster and bigger than a breath), filter_edge (the first and last 20 s of each recording file, so a flag can end at the file end), ecg_unconfirmed (the belt does not follow the ECG's breathing pattern; whole trim; judged only where the ECG is usable). junction and processing_failed as for every channel.",
+        "ProportionBad": 0.36354426229508197
+      },
+      "eda": {
+        "BadSegments": [],
+        "SegmentsByReason": {
+          "kleckner": [],
+          "ceiling": [],
+          "floor": [],
+          "flat": [],
+          "filter_edge": [],
+          "too_short": []
+        },
+        "Rule": "Bad where any reason holds: kleckner (out of range or too fast), ceiling, floor, flat, filter_edge (the first and last 1 s of each recording file, so a flag can end at the file end), too_short. junction and processing_failed as for every channel.",
+        "ProportionBad": 0.0
+      },
+      "emg_cor": {
+        "BadSegments": [],
+        "SegmentsByReason": {
+          "nonfinite": [],
+          "nonfinite_guard": [],
+          "clipped": [],
+          "clip_guard": [],
+          "mains": [],
+          "line": [],
+          "filter_edge": [],
+          "flat_record": [],
+          "clipped_record": [],
+          "too_short": []
+        },
+        "Rule": "Bad where any reason holds: clipped and clip_guard (sensor limit, +-1.5 s), nonfinite and its guard, mains (electrical noise left after filtering), line (narrowband interference lasting at least 3 of 5 neighbouring 2-s windows), filter_edge (the first and last 1.5 s of each recording file, so a flag can end at the file end), flat_record (the whole file: at least 90 % of the 2-s windows in the trim are flat, a dead channel), clipped_record (the whole file: at least 90 % of the trim at the sensor limit), too_short. No reason detects missing electrodes. Pass 2 applies every machine stretch whatever the RA does. junction and processing_failed as for every channel.",
+        "ProportionBad": 0.0
+      }
+    },
+    "Corrections": {
+      "ecg": {
+        "kubios_proposed_added": [],
+        "kubios_proposed_removed": [],
+        "kubios_categories": {
+          "ectopic": [],
+          "missed": [],
+          "extra": [],
+          "longshort": []
+        },
+        "kubios_iterations": [
+          [
+            {
+              "ectopic": [],
+              "missed": [],
+              "extra": [],
+              "longshort": []
+            }
+          ]
+        ],
+        "refractory_removed": [],
+        "systole_added": [],
+        "systole_removed": []
+      },
+      "ppg": {
+        "systole_added": [],
+        "systole_removed": []
+      }
+    }
+  },
+  "Provenance": {
+    "PipelineCommit": "d9c276d96f0b455f05cd684018d0bb02616059f9",
+    "StudyRepoCommit": "cc6a4684701597865b67c7f7c2f270ba8b4b1f7c",
+    "CodeSha256": {
+      "__init__.py": "d87cc8a6690acfa5a42233ca81c4a6cf56e5de75b2566411822013906f63c0ba",
+      "acq.py": "d18c1edbf2f711e2db9e410089f4594d85fef79c134e3d80d0ecb666757e91d7",
+      "ecg.py": "6217cebba053c4b75bab1aab9394ebf69140ae0772409d2715d788e8193492ff",
+      "eda.py": "06d7c6367c8fa9c5abd172b6cb2ed11e7eb58e724cadc1506a26f079fd019d0f",
+      "emg.py": "abf8cd00cf76ea805175b93e2c4c6f83ccbe18ccf5cb945deae676c3d8002514",
+      "filters.py": "3829d3b8397e488ccf74bbdea36e12298c7da7e1dc4356848b8800f4bbe030ca",
+      "pass1.py": "3b8b03cb9a75540e83c2cd7f07b5cf6facba4197cf6a05f544fbdc8b581e1219",
+      "plugins.py": "864b19417bce52e399ce2c6c431b165e96f60b37068f08755aed0517c47da987",
+      "ppg.py": "61e1cacef9d327bdad588111a378686adfac904938526c76b6ff34f1a4f49d83",
+      "profile.py": "9e8bdcd535e13bbd6e40cf28fe098cf762d07c692cfeb300920b7207971ecc13",
+      "provenance.py": "35db6e23691ee18e047b97460e5234be76615a1f2b68bae331af6a0d7be8d851",
+      "records.py": "cabcbd095b48fc0a02e60565c6e3f497b78ea7b028003755b3ffe8644e6b82b9",
+      "rsp.py": "c6c08a856c93a0332760baa62550293b7f3a17d026aa6c209cb37c08e9b7f6e2",
+      "writer.py": "bd6cd2f7ccfa8ed54e7a8a518ee35f202633eac74c7a47a33321838e500449db"
+    },
+    "ProfileFile": "urglab_profile.toml",
+    "ProfileSha256": "21078f4f17b896686be08955c4f6ac8fb924fd1ef95408558626931dfcc8486c",
+    "PluginFile": "urglab_plugins.py",
+    "PluginSha256": "6ee3a65e691301a606a5e3095eba93b9cdfb8901b64f87b25896f9578ffa318c",
+    "Dataset": "synthetic",
+    "Subject": "synth01",
+    "AcquisitionConfiguration": "mixed_10000",
+    "AdaptedFrom": "physioProcess@aa52976",
+    "HardwareModules": {
+      "ecg": "ECG - ECG100C",
+      "emg_cor": "COR - ERS100C",
+      "eda": "SCL - GSR100C",
+      "ppg": "PPG - PPG100C",
+      "rsp": "RSP - RSP100C"
+    },
+    "DecisionFlags": [],
+    "Parameters": {
+      "filters.ecg": {
+        "method": "butterworth",
+        "highpass_hz": 0.5,
+        "lowpass_hz": 40.0,
+        "order": 4,
+        "mains_hz": 60.0
+      },
+      "filters.emg": {
+        "highpass_hz": 20.0,
+        "mains_hz": 60.0,
+        "notch_max_hz": 500.0,
+        "smooth_ms": 100.0,
+        "rail_mv": 2.0,
+        "flat_std_floor_mv": 0.001,
+        "mains_ratio_max": 1.0,
+        "qc_window_s": 2.0,
+        "dead_share": 0.9,
+        "clipped_share": 0.9,
+        "line_db": 10.0,
+        "line_rms_mv": 0.005,
+        "line_persist": [
+          3,
+          5
+        ]
+      },
+      "filters.ppg": {
+        "rel_p2p": 0.05,
+        "floor_v": 0.05,
+        "rail_v": 10.0,
+        "rail_frac": 0.995,
+        "guard_s": 3.0,
+        "delay_lo_ms": 100.0,
+        "delay_hi_ms": 500.0,
+        "delay_tol_ms": 60.0,
+        "min_coupled": 0.5,
+        "window_s": 10.0,
+        "tail_s": 3.0
+      },
+      "filters.rsp": {
+        "flat_win_s": 2.0,
+        "flat_floor_v": 0.0001,
+        "flat_raw_floor_v": 0.000301,
+        "snr_win_s": 20.0,
+        "snr_min_db": 4.77,
+        "rail_v": 10.0,
+        "rail_frac": 0.995,
+        "rail_guard_s": 5.0,
+        "edge_s": 20.0,
+        "min_clean_s": 240.0,
+        "swing_lp_hz": 5.0,
+        "swing_width_s": 0.25,
+        "swing_size_b": 1.5,
+        "swing_merge_s": 1.0,
+        "swing_guard_s": 1.0,
+        "swing_b_min_v": 0.05
+      },
+      "filters.eda": {
+        "rail_us": 50.0,
+        "rail_frac": 0.995,
+        "floor_us": 0.05,
+        "raw_guard_s": 2.0,
+        "edge_s": 1.0,
+        "flat_win_s": 10.0,
+        "flat_floor_us": 0.001,
+        "scr_amp_min": 0.05,
+        "clean_rise_min": 0.05,
+        "rise_min_s": 0.5
+      },
+      "filters.ecg_usable": {
+        "rate_min": 40.0,
+        "rate_max": 150.0,
+        "half_ms": 100.0,
+        "min_consistency": 0.7
+      }
+    },
+    "Runtime": {
+      "Pins": {
+        "OPENBLAS_CORETYPE": "Prescott",
+        "OPENBLAS_NUM_THREADS": "1",
+        "NPY_DISABLE_CPU_FEATURES": "AVX512F AVX512CD AVX512_SKX AVX512_CLX AVX512_CNL AVX512_ICL"
+      },
+      "OpenBLAS": {
+        "numpy": {
+          "corename": "Prescott",
+          "threads": 1,
+          "config": "OpenBLAS 0.3.23.dev  USE64BITINT DYNAMIC_ARCH NO_AFFINITY Prescott MAX_THREADS=24"
+        },
+        "scipy": {
+          "corename": "Prescott",
+          "threads": 1,
+          "config": "OpenBLAS 0.3.27.dev DYNAMIC_ARCH NO_AFFINITY Prescott MAX_THREADS=24"
+        }
+      },
+      "NumpySIMDBaseline": [
+        "SSE",
+        "SSE2",
+        "SSE3"
+      ],
+      "NumpySIMDDispatchActive": [
+        "SSSE3",
+        "SSE41",
+        "POPCNT",
+        "SSE42",
+        "AVX",
+        "F16C",
+        "FMA3",
+        "AVX2"
+      ],
+      "Python": "3.11.9",
+      "Packages": {
+        "adtk": "0.6.2",
+        "bioread": "3.0.1",
+        "bokeh": "3.2.0",
+        "certifi": "2023.5.7",
+        "charset-normalizer": "3.2.0",
+        "colorama": "0.4.6",
+        "contourpy": "1.1.0",
+        "cycler": "0.11.0",
+        "docopt": "0.6.2",
+        "fonttools": "4.41.0",
+        "idna": "3.4",
+        "importlib_resources": "7.1.0",
+        "Jinja2": "3.1.2",
+        "joblib": "1.3.1",
+        "kiwisolver": "1.4.4",
+        "llvmlite": "0.47.0",
+        "MarkupSafe": "2.1.3",
+        "matplotlib": "3.7.2",
+        "neurokit2": "0.2.10",
+        "numba": "0.65.1",
+        "numpy": "1.26.4",
+        "packaging": "23.1",
+        "pandas": "2.0.3",
+        "patsy": "1.0.1",
+        "Pillow": "10.0.0",
+        "pyparsing": "3.0.9",
+        "pyserial": "3.5",
+        "python-dateutil": "2.8.2",
+        "pytz": "2023.3",
+        "PyYAML": "6.0.1",
+        "requests": "2.31.0",
+        "scikit-learn": "1.3.0",
+        "scipy": "1.14.1",
+        "seaborn": "0.12.1",
+        "setuptools": "80.10.2",
+        "six": "1.16.0",
+        "sleepecg": "0.5.5",
+        "statsmodels": "0.14.4",
+        "systole": "0.2.5.dev0",
+        "tabulate": "0.9.0",
+        "threadpoolctl": "3.2.0",
+        "tornado": "6.3.2",
+        "tqdm": "4.65.0",
+        "typing_extensions": "4.15.0",
+        "tzdata": "2023.3",
+        "urllib3": "2.0.4",
+        "xyzservices": "2023.7.0",
+        "zipp": "4.1.0"
+      }
+    },
+    "NumberOfSamples": 305000,
+    "SourceFiles": [
+      {
+        "Role": "task",
+        "File": "synthetic_breathing_fixture",
+        "StartTimeLocal": "2000-01-01T00:00:00.000",
+        "TsvRows": [
+          0,
+          305000
+        ],
+        "FileRows1000Hz": [
+          5000,
+          310000
+        ],
+        "FileLengthRows1000Hz": 315000,
+        "SecondsFromFileStart": 5.0,
+        "SecondsToFileEnd": 5.0,
+        "ChannelRates": {
+          "ecg": 2500.0,
+          "ppg": 2500.0,
+          "rsp": 2500.0,
+          "eda": 2500.0,
+          "emg_cor": 10000.0
+        },
+        "EventRate": 10000.0
+      }
+    ],
+    "Junctions": [],
+    "ChannelStatus": {
+      "ecg": [
+        "ok"
+      ],
+      "ppg": [
+        "ok"
+      ],
+      "rsp": [
+        "ok"
+      ],
+      "eda": [
+        "ok"
+      ],
+      "emg_cor": [
+        "ok"
+      ]
+    },
+    "ColumnHashDefinition": "physioprocess-column-sha256-v1",
+    "ColumnSha256": {
+      "ecg": "046522e22c088b7ed9ac49a8d915a5ff3473cc2d184b3dc90210d4eec22256e4",
+      "ppg": "14305925b40e405e77ed0fddceeb554ec6d560556f2f15d87014762b52c320e7",
+      "rsp": "e003ccc10721eb5ff3b43d8f249d4898b1ba4818fe6f67fcd2ab42b2b1fac9e3",
+      "eda": "0c2f5c4d0d464550d98a8305bd8c5c9a92da441adc139c86f76f790e2d0b9b75",
+      "emg_cor": "85202c8101ac7069adb3b4746a6ba2b057c102918252547e9c82755e9000af26",
+      "emg_cor_env": "089f11d4639c2295c2d93c42ae085f8ad486fb70cb4911d9fc990d180f046825",
+      "ecg_peaks": "398b1783391b635235a08a3bb08bbba4760b5f190c39da99c974223adef77e94",
+      "ppg_peaks": "5f18de4eaf34e2cc58a12e97602fa7167ebae5bc12f6a32aaa18211c2af01d8f",
+      "rsp_peaks": "78caed6a3b8ee7bfe05129999317deb44dcd380a4f679930d5910a95703b862a",
+      "eda_peaks": "da1c9e521a8ee68eed4f19b2a373ec6d53929c2e8f036f696ab793ce5592c9c6",
+      "event": "de0f86c39f21dc11b6a61380645127424a6d9e43292a6368f4529561fc0e7f0d",
+      "rsp_raw": "afe7f3e1d16ebb167498f6601c087809425b6941a39134ad959158a8d7894e57"
+    },
+    "Run": {
+      "ProcessedAtLocal": "2026-11-08T19:35:53",
+      "CPU": "Intel(R) Core(TM) Ultra 7 268V"
+    }
+  },
+  "Pass2Inputs": {
+    "task": {
+      "ecg": {
+        "QRSAgreement": 1.0,
+        "HRVPeaks": [
+          532,
+          1485,
+          2400,
+          3242,
+          4104,
+          5047,
+          5976,
+          6823,
+          7665,
+          8583,
+          9523,
+          10383,
+          11213,
+          12110,
+          13052,
+          13917,
+          14747,
+          15648,
+          16589,
+          17449,
+          18288,
+          19208,
+          20152,
+          21014,
+          21863,
+          22790,
+          23758,
+          24654,
+          25504,
+          26391,
+          27356,
+          28339,
+          29257,
+          30122,
+          30991,
+          31919,
+          32909,
+          33877,
+          34771,
+          35625,
+          36501,
+          37445,
+          38413,
+          39311,
+          40149,
+          41001,
+          41924,
+          42855,
+          43706,
+          44518,
+          45369,
+          46281,
+          47164,
+          47975,
+          48772,
+          49621,
+          50518,
+          51374,
+          52168,
+          52959,
+          53808,
+          54700,
+          55543,
+          56333,
+          57139,
+          58018,
+          58905,
+          59720,
+          60525,
+          61404,
+          62311,
+          63142,
+          63964,
+          64870,
+          65785,
+          66622,
+          67469,
+          68404,
+          69329,
+          70176,
+          71032,
+          71971,
+          72924,
+          73799,
+          74643,
+          75538,
+          76504,
+          77438,
+          78297,
+          79143,
+          80051,
+          81013,
+          81916,
+          82755,
+          83616,
+          84557,
+          85483,
+          86327,
+          87172,
+          88100,
+          89031,
+          89880,
+          90721,
+          91640,
+          92586,
+          93455,
+          94292,
+          95182,
+          96144,
+          97075,
+          97936,
+          98785,
+          99694,
+          100670,
+          101620,
+          102497,
+          103352,
+          104259,
+          105238,
+          106192,
+          107066,
+          107922,
+          108841,
+          109815,
+          110729,
+          111574,
+          112431,
+          113359,
+          114302,
+          115171,
+          115990,
+          116830,
+          117732,
+          118650,
+          119506,
+          120308,
+          121113,
+          121968,
+          122868,
+          123731,
+          124532,
+          125318,
+          126154,
+          127044,
+          127892,
+          128680,
+          129487,
+          130370,
+          131237,
+          132035,
+          132856,
+          133756,
+          134622,
+          135429,
+          136283,
+          137208,
+          138069,
+          138893,
+          139791,
+          140733,
+          141598,
+          142439,
+          143354,
+          144319,
+          145213,
+          146061,
+          146952,
+          147923,
+          148868,
+          149733,
+          150592,
+          151523,
+          152496,
+          153394,
+          154239,
+          155122,
+          156082,
+          157013,
+          157866,
+          158709,
+          159618,
+          160574,
+          161475,
+          162313,
+          163152,
+          164052,
+          165005,
+          165927,
+          166784,
+          167616,
+          168481,
+          169416,
+          170375,
+          171273,
+          172118,
+          172976,
+          173910,
+          174878,
+          175769,
+          176618,
+          177521,
+          178494,
+          179405,
+          180254,
+          181150,
+          182119,
+          183026,
+          183867,
+          184743,
+          185693,
+          186610,
+          187449,
+          188280,
+          189169,
+          190100,
+          190978,
+          191791,
+          192601,
+          193465,
+          194372,
+          195233,
+          196031,
+          196827,
+          197684,
+          198574,
+          199402,
+          200186,
+          201006,
+          201893,
+          202746,
+          203537,
+          204351,
+          205242,
+          206114,
+          206919,
+          207739,
+          208640,
+          209543,
+          210374,
+          211200,
+          212102,
+          213044,
+          213918,
+          214755,
+          215645,
+          216612,
+          217534,
+          218389,
+          219271,
+          220244,
+          221191,
+          222056,
+          222940,
+          223914,
+          224860,
+          225722,
+          226600,
+          227564,
+          228514,
+          229380,
+          230230,
+          231139,
+          232104,
+          233028,
+          233883,
+          234715,
+          235580,
+          236508,
+          237460,
+          238363,
+          239207,
+          240035,
+          240901,
+          241832,
+          242781,
+          243672,
+          244509,
+          245358,
+          246283,
+          247239,
+          248120,
+          248960,
+          249854,
+          250818,
+          251725,
+          252568,
+          253450,
+          254410,
+          255328,
+          256171,
+          257032,
+          257973,
+          258901,
+          259747,
+          260580,
+          261480,
+          262410,
+          263261,
+          264072,
+          264934,
+          265848,
+          266698,
+          267496,
+          268336,
+          269233,
+          270074,
+          270862,
+          271694,
+          272584,
+          273421,
+          274207,
+          275029,
+          275918,
+          276780,
+          277580,
+          278381,
+          279248,
+          280158,
+          281021,
+          281833,
+          282652,
+          283536,
+          284474,
+          285378,
+          286221,
+          287059,
+          287964,
+          288933,
+          289854,
+          290710,
+          291590,
+          292560,
+          293521,
+          294398,
+          295277,
+          296247,
+          297218,
+          298099,
+          298970,
+          299920,
+          300900,
+          301800,
+          302650,
+          303534,
+          304490
+        ],
+        "QRS": [
+          534,
+          1487,
+          2402,
+          3244,
+          4106,
+          5049,
+          5978,
+          6825,
+          7667,
+          8585,
+          9525,
+          10385,
+          11215,
+          12112,
+          13054,
+          13919,
+          14749,
+          15650,
+          16591,
+          17451,
+          18290,
+          19210,
+          20154,
+          21016,
+          21865,
+          22792,
+          23760,
+          24655,
+          25506,
+          26393,
+          27358,
+          28341,
+          29259,
+          30124,
+          30993,
+          31921,
+          32911,
+          33879,
+          34773,
+          35627,
+          36503,
+          37447,
+          38415,
+          39313,
+          40151,
+          41003,
+          41926,
+          42857,
+          43708,
+          44520,
+          45371,
+          46283,
+          47166,
+          47977,
+          48774,
+          49623,
+          50520,
+          51376,
+          52170,
+          52961,
+          53810,
+          54702,
+          55545,
+          56335,
+          57141,
+          58020,
+          58907,
+          59722,
+          60527,
+          61406,
+          62313,
+          63144,
+          63965,
+          64872,
+          65787,
+          66624,
+          67471,
+          68406,
+          69331,
+          70178,
+          71033,
+          71973,
+          72926,
+          73801,
+          74645,
+          75540,
+          76506,
+          77440,
+          78299,
+          79145,
+          80053,
+          81015,
+          81918,
+          82757,
+          83618,
+          84559,
+          85485,
+          86329,
+          87174,
+          88102,
+          89033,
+          89881,
+          90723,
+          91642,
+          92588,
+          93457,
+          94294,
+          95184,
+          96146,
+          97077,
+          97938,
+          98788,
+          99696,
+          100672,
+          101622,
+          102499,
+          103354,
+          104261,
+          105240,
+          106194,
+          107068,
+          107924,
+          108843,
+          109817,
+          110731,
+          111576,
+          112433,
+          113361,
+          114304,
+          115173,
+          115992,
+          116832,
+          117734,
+          118652,
+          119508,
+          120310,
+          121115,
+          121970,
+          122870,
+          123733,
+          124533,
+          125320,
+          126156,
+          127046,
+          127894,
+          128682,
+          129489,
+          130372,
+          131239,
+          132037,
+          132858,
+          133758,
+          134624,
+          135431,
+          136285,
+          137210,
+          138071,
+          138895,
+          139793,
+          140735,
+          141600,
+          142441,
+          143356,
+          144321,
+          145216,
+          146063,
+          146954,
+          147925,
+          148869,
+          149735,
+          150594,
+          151525,
+          152498,
+          153396,
+          154241,
+          155124,
+          156084,
+          157015,
+          157868,
+          158711,
+          159620,
+          160576,
+          161477,
+          162315,
+          163154,
+          164054,
+          165007,
+          165930,
+          166786,
+          167618,
+          168483,
+          169418,
+          170377,
+          171275,
+          172120,
+          172978,
+          173912,
+          174880,
+          175771,
+          176620,
+          177523,
+          178496,
+          179407,
+          180256,
+          181152,
+          182121,
+          183028,
+          183869,
+          184745,
+          185696,
+          186612,
+          187451,
+          188282,
+          189171,
+          190102,
+          190979,
+          191793,
+          192603,
+          193467,
+          194374,
+          195235,
+          196033,
+          196829,
+          197686,
+          198576,
+          199404,
+          200188,
+          201008,
+          201895,
+          202748,
+          203539,
+          204353,
+          205244,
+          206116,
+          206921,
+          207741,
+          208642,
+          209545,
+          210376,
+          211202,
+          212104,
+          213046,
+          213920,
+          214757,
+          215647,
+          216614,
+          217536,
+          218391,
+          219273,
+          220246,
+          221193,
+          222058,
+          222942,
+          223916,
+          224861,
+          225724,
+          226602,
+          227565,
+          228516,
+          229382,
+          230232,
+          231141,
+          232106,
+          233029,
+          233885,
+          234717,
+          235582,
+          236510,
+          237462,
+          238365,
+          239209,
+          240037,
+          240903,
+          241834,
+          242783,
+          243674,
+          244511,
+          245360,
+          246285,
+          247241,
+          248122,
+          248962,
+          249856,
+          250820,
+          251727,
+          252570,
+          253452,
+          254412,
+          255330,
+          256173,
+          257034,
+          257975,
+          258903,
+          259749,
+          260582,
+          261482,
+          262412,
+          263264,
+          264074,
+          264936,
+          265850,
+          266700,
+          267498,
+          268338,
+          269235,
+          270076,
+          270864,
+          271696,
+          272586,
+          273423,
+          274209,
+          275031,
+          275920,
+          276782,
+          277581,
+          278383,
+          279250,
+          280160,
+          281024,
+          281835,
+          282654,
+          283537,
+          284476,
+          285380,
+          286223,
+          287061,
+          287966,
+          288935,
+          289856,
+          290712,
+          291592,
+          292562,
+          293524,
+          294400,
+          295279,
+          296249,
+          297220,
+          298101,
+          298972,
+          299922,
+          300902,
+          301802,
+          302652,
+          303536,
+          304492
+        ],
+        "SystoleSkipped": false
+      },
+      "ppg": {
+        "FloorV": 0.05,
+        "DelayMs": 298.0,
+        "SystoleSkipped": false,
+        "ECGAvailable": true
+      },
+      "rsp": {
+        "Troughs": [
+          1308,
+          5032,
+          8837,
+          12504,
+          15979,
+          19423,
+          23149,
+          76355,
+          80638,
+          84541,
+          88177,
+          92243,
+          96071,
+          100520,
+          105145,
+          109445,
+          113638,
+          118047,
+          122462,
+          126851,
+          133571,
+          142376,
+          148003,
+          155974,
+          160172,
+          164801,
+          169696,
+          175377,
+          181818,
+          185577,
+          189708,
+          223845,
+          227513,
+          228992,
+          231746,
+          236936,
+          242155,
+          246624,
+          250494,
+          254212,
+          257998,
+          261810,
+          265453,
+          269004,
+          272247,
+          275760,
+          279710,
+          284169,
+          288587,
+          292572,
+          296338,
+          300266
+        ],
+        "BreathingTest": {
+          "tested": false,
+          "confirmed": null,
+          "pwc": null,
+          "surrogate_max": null,
+          "rank": null,
+          "segments": 22
+        },
+        "SNR": [
+          [
+            -5000,
+            15000,
+            9.985063804921584
+          ],
+          [
+            15000,
+            35000,
+            10.710297862814599
+          ],
+          [
+            35000,
+            55000,
+            8.18988988085999
+          ],
+          [
+            55000,
+            75000,
+            7.807310069236578
+          ],
+          [
+            75000,
+            95000,
+            12.151836769104296
+          ],
+          [
+            95000,
+            115000,
+            10.101454051141305
+          ],
+          [
+            115000,
+            135000,
+            11.324929378647617
+          ],
+          [
+            135000,
+            155000,
+            11.244477638908688
+          ],
+          [
+            155000,
+            175000,
+            10.24094030984803
+          ],
+          [
+            175000,
+            195000,
+            10.879213571997715
+          ],
+          [
+            195000,
+            215000,
+            7.838652276716777
+          ],
+          [
+            215000,
+            235000,
+            15.04303135141158
+          ],
+          [
+            235000,
+            255000,
+            10.320026589567222
+          ],
+          [
+            255000,
+            275000,
+            10.384417352550418
+          ],
+          [
+            275000,
+            310000,
+            11.181999147317303
+          ]
+        ],
+        "ExtremaSkipped": false,
+        "Swing": {
+          "Tested": true,
+          "TypicalHalfBreathV": 0.9924883230421097
+        }
+      },
+      "eda": {
+        "SCR": {
+          "onset": [
+            56899.0,
+            85899.0,
+            119899.0,
+            153899.0,
+            187900.0,
+            221899.0,
+            255898.0
+          ],
+          "peak": [
+            58125,
+            87140,
+            121121,
+            155142,
+            189137,
+            223133,
+            257148
+          ],
+          "amplitude": [
+            0.14481563553886806,
+            0.38738666629851976,
+            0.19328779551518388,
+            0.38712216376687,
+            0.19363841835666712,
+            0.3867992014839365,
+            0.19370212526088734
+          ],
+          "clean_rise": [
+            0.11799934635785547,
+            0.41211074006467374,
+            0.1952629169691864,
+            0.40766408618700556,
+            0.20916930538711043,
+            0.3841237806731339,
+            0.21080022421616817
+          ],
+          "rise_time": [
+            1.226,
+            1.241,
+            1.222,
+            1.243,
+            1.237,
+            1.234,
+            1.25
+          ],
+          "recovery": [
+            65262.0,
+            94284.0,
+            128271.0,
+            162280.0,
+            196286.0,
+            230274.0,
+            264288.0
+          ],
+          "height": [
+            0.09771881489397476,
+            0.26538950119365073,
+            0.1301673399853414,
+            0.2666976493388731,
+            0.1292387937417148,
+            0.26697913187464334,
+            0.12998999087669663
+          ]
+        },
+        "SCRCounts": {
+          "candidates": 276,
+          "amplitude": 268,
+          "clean_rise": 1,
+          "rise_time": 0
+        },
+        "SCRSkipped": false,
+        "SlopeUSPerS": -0.0010468612443451468,
+        "InterceptUS": 5.974008821508111
+      },
+      "emg_cor": {
+        "RawMainsShare": [
+          [
+            1000,
+            0.061968726907691236
+          ],
+          [
+            3000,
+            0.05844397702237676
+          ],
+          [
+            5000,
+            0.041781062355317256
+          ],
+          [
+            7000,
+            0.05491789206164473
+          ],
+          [
+            9000,
+            0.057057492243949536
+          ],
+          [
+            11000,
+            0.0642267180199399
+          ],
+          [
+            13000,
+            0.051737816215458664
+          ],
+          [
+            15000,
+            0.045540617647092434
+          ],
+          [
+            17000,
+            0.0491741318547733
+          ],
+          [
+            19000,
+            0.059259587183186836
+          ],
+          [
+            21000,
+            0.03412247005456575
+          ],
+          [
+            23000,
+            0.050708718910419226
+          ],
+          [
+            25000,
+            0.06079909477213376
+          ],
+          [
+            27000,
+            0.03158456160490995
+          ],
+          [
+            29000,
+            0.07529525075962845
+          ],
+          [
+            31000,
+            0.07467638637148677
+          ],
+          [
+            33000,
+            0.03664525563308122
+          ],
+          [
+            35000,
+            0.07697433289936309
+          ],
+          [
+            37000,
+            0.06372685909204634
+          ],
+          [
+            39000,
+            0.046964737572992986
+          ],
+          [
+            41000,
+            0.040106775997113285
+          ],
+          [
+            43000,
+            0.048732080269707684
+          ],
+          [
+            45000,
+            0.045634396533986196
+          ],
+          [
+            47000,
+            0.05298901171321962
+          ],
+          [
+            49000,
+            0.051194828509825825
+          ],
+          [
+            51000,
+            0.026841382179682967
+          ],
+          [
+            53000,
+            0.04675134492081045
+          ],
+          [
+            55000,
+            0.048414255356753595
+          ],
+          [
+            57000,
+            0.06139235465167587
+          ],
+          [
+            59000,
+            0.05719427044190589
+          ],
+          [
+            61000,
+            0.03530472667749055
+          ],
+          [
+            63000,
+            0.08244658230465919
+          ],
+          [
+            65000,
+            0.04171651540830754
+          ],
+          [
+            67000,
+            0.04862274487378807
+          ],
+          [
+            69000,
+            0.04353059765055482
+          ],
+          [
+            71000,
+            0.07626733653829557
+          ],
+          [
+            73000,
+            0.04331463562637265
+          ],
+          [
+            75000,
+            0.06733040083143618
+          ],
+          [
+            77000,
+            0.0469240955233861
+          ],
+          [
+            79000,
+            0.04866725060844838
+          ],
+          [
+            81000,
+            0.04727009722564631
+          ],
+          [
+            83000,
+            0.05719421916565385
+          ],
+          [
+            85000,
+            0.05349904009347712
+          ],
+          [
+            87000,
+            0.05572616383083157
+          ],
+          [
+            89000,
+            0.04991481700841519
+          ],
+          [
+            91000,
+            0.044735904578788614
+          ],
+          [
+            93000,
+            0.04479810078016041
+          ],
+          [
+            95000,
+            0.050629711580618214
+          ],
+          [
+            97000,
+            0.058521540576241544
+          ],
+          [
+            99000,
+            0.03669547249928826
+          ],
+          [
+            101000,
+            0.05377115449192499
+          ],
+          [
+            103000,
+            0.05602906593743027
+          ],
+          [
+            105000,
+            0.05011837760213472
+          ],
+          [
+            107000,
+            0.05353001650051198
+          ],
+          [
+            109000,
+            0.06623349779062965
+          ],
+          [
+            111000,
+            0.07084286334389096
+          ],
+          [
+            113000,
+            0.05417039031719859
+          ],
+          [
+            115000,
+            0.04516017893281057
+          ],
+          [
+            117000,
+            0.04181766364190071
+          ],
+          [
+            119000,
+            0.06620749514287949
+          ],
+          [
+            121000,
+            0.05216608232072502
+          ],
+          [
+            123000,
+            0.04317242216859687
+          ],
+          [
+            125000,
+            0.05495875363740091
+          ],
+          [
+            127000,
+            0.039619202155517716
+          ],
+          [
+            129000,
+            0.04800591342172899
+          ],
+          [
+            131000,
+            0.0391022410171342
+          ],
+          [
+            133000,
+            0.04298509525752255
+          ],
+          [
+            135000,
+            0.04858602571380574
+          ],
+          [
+            137000,
+            0.04568511549937054
+          ],
+          [
+            139000,
+            0.05513093934813821
+          ],
+          [
+            141000,
+            0.03820376521459703
+          ],
+          [
+            143000,
+            0.050976297020785044
+          ],
+          [
+            145000,
+            0.05044131437228447
+          ],
+          [
+            147000,
+            0.04787655428520319
+          ],
+          [
+            149000,
+            0.043986974367974184
+          ],
+          [
+            151000,
+            0.03688013853657978
+          ],
+          [
+            153000,
+            0.036954000393770864
+          ],
+          [
+            155000,
+            0.07004939077164372
+          ],
+          [
+            157000,
+            0.04280120660082486
+          ],
+          [
+            159000,
+            0.04934324837126213
+          ],
+          [
+            161000,
+            0.07672985220699075
+          ],
+          [
+            163000,
+            0.04334717558422317
+          ],
+          [
+            165000,
+            0.04280811006874734
+          ],
+          [
+            167000,
+            0.050450298482483925
+          ],
+          [
+            169000,
+            0.03438534834041407
+          ],
+          [
+            171000,
+            0.06814452816886606
+          ],
+          [
+            173000,
+            0.04507928875572498
+          ],
+          [
+            175000,
+            0.034372243228276186
+          ],
+          [
+            177000,
+            0.05662281110476305
+          ],
+          [
+            179000,
+            0.05822370696380108
+          ],
+          [
+            181000,
+            0.05665177421422299
+          ],
+          [
+            183000,
+            0.04214249177352608
+          ],
+          [
+            185000,
+            0.04981820976285756
+          ],
+          [
+            187000,
+            0.06669695409215035
+          ],
+          [
+            189000,
+            0.041534131726894206
+          ],
+          [
+            191000,
+            0.04527781071495026
+          ],
+          [
+            193000,
+            0.049476406979939276
+          ],
+          [
+            195000,
+            0.04340224158852209
+          ],
+          [
+            197000,
+            0.052069482558549644
+          ],
+          [
+            199000,
+            0.050003082108739653
+          ],
+          [
+            201000,
+            0.07930232537328803
+          ],
+          [
+            203000,
+            0.036311952966390504
+          ],
+          [
+            205000,
+            0.0459286117420295
+          ],
+          [
+            207000,
+            0.06218654723214263
+          ],
+          [
+            209000,
+            0.03928872577359857
+          ],
+          [
+            211000,
+            0.039213055404611945
+          ],
+          [
+            213000,
+            0.04481613238299365
+          ],
+          [
+            215000,
+            0.04444098661695884
+          ],
+          [
+            217000,
+            0.04524466607818024
+          ],
+          [
+            219000,
+            0.043185794622780674
+          ],
+          [
+            221000,
+            0.06540455158685031
+          ],
+          [
+            223000,
+            0.08262919130726082
+          ],
+          [
+            225000,
+            0.05800425875838779
+          ],
+          [
+            227000,
+            0.04741362787459213
+          ],
+          [
+            229000,
+            0.06897678567123094
+          ],
+          [
+            231000,
+            0.059233064153346796
+          ],
+          [
+            233000,
+            0.0798665003166532
+          ],
+          [
+            235000,
+            0.056638541673224234
+          ],
+          [
+            237000,
+            0.04305686905236163
+          ],
+          [
+            239000,
+            0.041522939935389545
+          ],
+          [
+            241000,
+            0.056855219379943624
+          ],
+          [
+            243000,
+            0.05257881742314606
+          ],
+          [
+            245000,
+            0.04784808925041816
+          ],
+          [
+            247000,
+            0.05583137262733366
+          ],
+          [
+            249000,
+            0.0386212746864792
+          ],
+          [
+            251000,
+            0.04790061055844819
+          ],
+          [
+            253000,
+            0.05284039280254841
+          ],
+          [
+            255000,
+            0.043944604783915465
+          ],
+          [
+            257000,
+            0.062004344974778226
+          ],
+          [
+            259000,
+            0.034190992192004464
+          ],
+          [
+            261000,
+            0.06398677283490721
+          ],
+          [
+            263000,
+            0.06114797151460464
+          ],
+          [
+            265000,
+            0.056954378200505425
+          ],
+          [
+            267000,
+            0.04489670978845991
+          ],
+          [
+            269000,
+            0.04728583865512035
+          ],
+          [
+            271000,
+            0.05449410355095641
+          ],
+          [
+            273000,
+            0.055894738324187836
+          ],
+          [
+            275000,
+            0.05919451269009153
+          ],
+          [
+            277000,
+            0.058771573862763736
+          ],
+          [
+            279000,
+            0.055413102911738135
+          ],
+          [
+            281000,
+            0.05629817761946676
+          ],
+          [
+            283000,
+            0.05625937657187221
+          ],
+          [
+            285000,
+            0.06137324801260588
+          ],
+          [
+            287000,
+            0.06032054496030519
+          ],
+          [
+            289000,
+            0.061653244161421705
+          ],
+          [
+            291000,
+            0.04064433931762742
+          ],
+          [
+            293000,
+            0.04608607811015559
+          ],
+          [
+            295000,
+            0.039720920322425385
+          ],
+          [
+            297000,
+            0.04585999083255595
+          ],
+          [
+            299000,
+            0.052576889381964836
+          ],
+          [
+            301000,
+            0.040200269907076334
+          ],
+          [
+            303000,
+            0.0676853787770787
+          ]
+        ],
+        "FlatShare": 0.0,
+        "ClippedShare": 0.0
+      },
+      "Status": {
+        "ecg": "ok",
+        "ppg": "ok",
+        "rsp": "ok",
+        "eda": "ok",
+        "emg_cor": "ok"
+      }
+    }
+  }
+}
