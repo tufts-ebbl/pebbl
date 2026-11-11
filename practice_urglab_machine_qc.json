@@ -1,35 +1,37 @@
 {
- "method": "A7, version 2 (urglab practice key v2): physiopipe's MachineQC block for PEBBL's synthetic practice files,",
+ "method": "A7, version 3 (after physiopipe's on-task change): physiopipe's MachineQC block for PEBBL's synthetic practice files,",
  "code": {
-  "physiopipe_commit": "e30039fe67fda95cc2efdc4e5ca29d8cd700863c",
+  "physiopipe_commit": "6bf462e4e48b052651866c5071c0e4e4fe2f9972",
   "physiopipe_code_sha256": {
    "__init__.py": "d87cc8a6690acfa5a42233ca81c4a6cf56e5de75b2566411822013906f63c0ba",
    "acq.py": "d18c1edbf2f711e2db9e410089f4594d85fef79c134e3d80d0ecb666757e91d7",
-   "ecg.py": "6217cebba053c4b75bab1aab9394ebf69140ae0772409d2715d788e8193492ff",
-   "eda.py": "06d7c6367c8fa9c5abd172b6cb2ed11e7eb58e724cadc1506a26f079fd019d0f",
-   "emg.py": "abf8cd00cf76ea805175b93e2c4c6f83ccbe18ccf5cb945deae676c3d8002514",
+   "ecg.py": "35ccb481cfcea27b8e78e1573a8eb83baa805ade2cef048de86cd5012b363715",
+   "eda.py": "b8708668d78091beb18fd856477ab4abedcf398bf80290da6e056dc0ed0dd397",
+   "emg.py": "7eaefb0e8a1ccd4ec6d1565132851a3901cf2cd04077162a2732c96770e95802",
    "filters.py": "3829d3b8397e488ccf74bbdea36e12298c7da7e1dc4356848b8800f4bbe030ca",
    "pass1.py": "3b8b03cb9a75540e83c2cd7f07b5cf6facba4197cf6a05f544fbdc8b581e1219",
    "plugins.py": "864b19417bce52e399ce2c6c431b165e96f60b37068f08755aed0517c47da987",
-   "ppg.py": "61e1cacef9d327bdad588111a378686adfac904938526c76b6ff34f1a4f49d83",
+   "ppg.py": "0914574da3ca4cf2ae295b2c1086b2a42e386b0a3055b0a6d2d64615d62e7847",
    "profile.py": "9e8bdcd535e13bbd6e40cf28fe098cf762d07c692cfeb300920b7207971ecc13",
    "provenance.py": "35db6e23691ee18e047b97460e5234be76615a1f2b68bae331af6a0d7be8d851",
    "records.py": "cabcbd095b48fc0a02e60565c6e3f497b78ea7b028003755b3ffe8644e6b82b9",
-   "rsp.py": "c6c08a856c93a0332760baa62550293b7f3a17d026aa6c209cb37c08e9b7f6e2",
-   "writer.py": "bd6cd2f7ccfa8ed54e7a8a518ee35f202633eac74c7a47a33321838e500449db"
+   "rsp.py": "6f740fd3ab7b2a1c963b82e20417b04d88ab246b9d0db5bb68054e164a67192f",
+   "writer.py": "998a851120fa22892a8fde2780260cd864d55eae634337e254d96acb801ac65f"
   },
-  "urglab_profile_sha256": "21078f4f17b896686be08955c4f6ac8fb924fd1ef95408558626931dfcc8486c"
+  "urglab_profile_sha256": "284d59d44375de46f8b0b6d53a842f45b04d62481640c9c2883dfdaf837f48bb"
  },
  "subjects": {
   "990": {
-   "sidecar_sha256": "64b86fc6f92a502cbb8d5f5ac926f587855fa089a52a75ed38d68fbd23b84afd",
-   "tsv_gz_sha256": "996034f4be0a7f13f65b4e20170d5dd9258e5fd7d0ac90e2aa7027bb94b3ba99",
+   "sidecar_sha256": "8aa75d2915316baabac67ad91ea50d8bad89cb5ab3b3d54efcca21b992dc79bd",
+   "tsv_gz_sha256": "a32a540f3952b20432928519abb668b10e9445e376aea9a4b6365b1a85cb7665",
    "tsv_unzipped_sha256": "4e59b406f078be7e9c66a5cfdc22bc7bf8dcc7aec6965c022c36b1ca68aea29b",
    "rows": 180000,
    "padding_samples": [
     5000,
     5000
    ],
+   "on_task_rows": 135000,
+   "used_trim": false,
    "status": {
     "ecg": "ok",
     "ppg": "ok",
@@ -62,7 +64,7 @@
         ]
        ]
       },
-      "Rule": "Bad where the cleaned ECG is flat (0.5-s windows from each file's first sample with SD < 0.001 mV). junction: the one-sample join of two files. processing_failed: the channel could not be processed.",
+      "Rule": "Bad where the cleaned ECG is flat (0.5-s windows from each file's first sample with SD < 0.001 mV; a final part shorter than 0.5 s is not tested). junction: the one-sample join of two files. processing_failed: the channel could not be processed.",
       "ProportionBad": 0.019444444444444445
      },
      "ppg": {
@@ -130,7 +132,7 @@
        ],
        "ecg_unconfirmed": []
       },
-      "Rule": "Bad where any reason holds: flat, flat_raw (dead belt, 2-s windows), snr (20-s windows), rail (within 5 s of the sensor limit), swing (within 1 s of a sudden belt step faster and bigger than a breath), filter_edge (the first and last 20 s of each recording file, so a flag can end at the file end), ecg_unconfirmed (the belt does not follow the ECG's breathing pattern; whole trim; judged only where the ECG is usable). junction and processing_failed as for every channel.",
+      "Rule": "Bad where any reason holds: flat, flat_raw (dead belt, 2-s windows), rail (within 5 s of the sensor limit), swing (within 1 s of a sudden belt step faster and bigger than a breath), filter_edge (the first and last 20 s of each recording file; inside the tsv only where the trim comes that close to a file's start or end), ecg_unconfirmed (the belt does not follow the ECG's breathing pattern; marks that file's whole trim; tested only when the trim holds at least 45 clean 20-s stretches at 5-s steps, i.e. 240 s or more, free of flat, flat_raw, rail and filter_edge marks and with a usable ECG; not tested without an ECG). snr (20-s windows) is kept from physioProcess but cannot mark anything: its score never falls below its 4.77-dB cut. junction and processing_failed as for every channel.",
       "ProportionBad": 0.2266388888888889
      },
      "eda": {
@@ -162,7 +164,7 @@
        "filter_edge": [],
        "too_short": []
       },
-      "Rule": "Bad where any reason holds: kleckner (out of range or too fast), ceiling, floor, flat, filter_edge (the first and last 1 s of each recording file, so a flag can end at the file end), too_short. junction and processing_failed as for every channel.",
+      "Rule": "Bad where any reason holds: kleckner (out of range or too fast, judged on a smoothed copy: a 2-s moving average run forward and backward), ceiling (within 2 s of the sensor's upper limit), floor (within 2 s of a reading below 0.05 uS), flat, filter_edge (the first and last 1 s of each recording file; inside the tsv only where the trim comes that close to a file's start or end), too_short (a file of 6 s or less). junction and processing_failed as for every channel.",
       "ProportionBad": 0.09166666666666666
      },
      "emg_cor": {
@@ -179,38 +181,31 @@
        "clipped_record": [],
        "too_short": []
       },
-      "Rule": "Bad where any reason holds: clipped and clip_guard (sensor limit, +-1.5 s), nonfinite and its guard, mains (electrical noise left after filtering), line (narrowband interference lasting at least 3 of 5 neighbouring 2-s windows), filter_edge (the first and last 1.5 s of each recording file, so a flag can end at the file end), flat_record (the whole file: at least 90 % of the 2-s windows in the trim are flat, a dead channel), clipped_record (the whole file: at least 90 % of the trim at the sensor limit), too_short. No reason detects missing electrodes. Pass 2 applies every machine stretch whatever the RA does. junction and processing_failed as for every channel.",
+      "Rule": "Bad where any reason holds: clipped (a 2-s window holding a sample at the sensor limit) and clip_guard (1.5 s either side), nonfinite (a 2-s window holding a missing sample) and nonfinite_guard (1.5 s either side), mains (electrical noise left after filtering), line (narrowband interference lasting at least 3 of 5 neighbouring 2-s windows), filter_edge (the first and last 1.5 s of each recording file; inside the tsv only where the trim comes that close to a file's start or end), flat_record (the whole file: at least 90 % of the 2-s windows holding an on-task row are flat, a dead channel), clipped_record (the whole file: at least 90 % of the on-task rows are clipped or clip_guard; on-task rows: the baseline and the task phases other than the ratings, left out: dr_grid and ct_grid). too_short cannot occur here (a record under 3 s fails first). No reason detects missing electrodes. Pass 2 applies every machine stretch whatever the RA does. junction and processing_failed as for every channel.",
       "ProportionBad": 0.0
      }
     }
    },
    "depends_on_padding": {},
    "differs_from_sidecar": {
-    "ecg": [
-     "flat"
-    ],
+    "ecg": [],
     "ppg": [],
-    "rsp": [
-     "filter_edge",
-     "flat",
-     "swing"
-    ],
-    "eda": [
-     "flat",
-     "floor"
-    ],
+    "rsp": [],
+    "eda": [],
     "emg_cor": []
    }
   },
   "991": {
-   "sidecar_sha256": "cb25f421ce588ace70702c5dca7ef436ea9f362ba67d01b241d72e1fdaf92df3",
-   "tsv_gz_sha256": "6784abadafbf7d8a36a8ae2464e8cb1c741d4ba158bfec97d7182846b58c3235",
+   "sidecar_sha256": "dbb3d325955fbbe37380823e59a38d7577bdd0c9572c20ab90b15aecabd9fbe0",
+   "tsv_gz_sha256": "80c093a27c75b8b6b2d49dd92984521b4a0166f4883d2500845bd34e72ef94c3",
    "tsv_unzipped_sha256": "ebb29083c79355e8b56b9c3df2289e859ecb3ad9a69308455f62b1933e4f68b7",
    "rows": 180000,
    "padding_samples": [
     5000,
     5000
    ],
+   "on_task_rows": 135000,
+   "used_trim": false,
    "status": {
     "ecg": "ok",
     "ppg": "ok",
@@ -243,7 +238,7 @@
         ]
        ]
       },
-      "Rule": "Bad where the cleaned ECG is flat (0.5-s windows from each file's first sample with SD < 0.001 mV). junction: the one-sample join of two files. processing_failed: the channel could not be processed.",
+      "Rule": "Bad where the cleaned ECG is flat (0.5-s windows from each file's first sample with SD < 0.001 mV; a final part shorter than 0.5 s is not tested). junction: the one-sample join of two files. processing_failed: the channel could not be processed.",
       "ProportionBad": 0.03611111111111111
      },
      "ppg": {
@@ -311,7 +306,7 @@
        ],
        "ecg_unconfirmed": []
       },
-      "Rule": "Bad where any reason holds: flat, flat_raw (dead belt, 2-s windows), snr (20-s windows), rail (within 5 s of the sensor limit), swing (within 1 s of a sudden belt step faster and bigger than a breath), filter_edge (the first and last 20 s of each recording file, so a flag can end at the file end), ecg_unconfirmed (the belt does not follow the ECG's breathing pattern; whole trim; judged only where the ECG is usable). junction and processing_failed as for every channel.",
+      "Rule": "Bad where any reason holds: flat, flat_raw (dead belt, 2-s windows), rail (within 5 s of the sensor limit), swing (within 1 s of a sudden belt step faster and bigger than a breath), filter_edge (the first and last 20 s of each recording file; inside the tsv only where the trim comes that close to a file's start or end), ecg_unconfirmed (the belt does not follow the ECG's breathing pattern; marks that file's whole trim; tested only when the trim holds at least 45 clean 20-s stretches at 5-s steps, i.e. 240 s or more, free of flat, flat_raw, rail and filter_edge marks and with a usable ECG; not tested without an ECG). snr (20-s windows) is kept from physioProcess but cannot mark anything: its score never falls below its 4.77-dB cut. junction and processing_failed as for every channel.",
       "ProportionBad": 0.28507777777777776
      },
      "eda": {
@@ -324,7 +319,7 @@
        "filter_edge": [],
        "too_short": []
       },
-      "Rule": "Bad where any reason holds: kleckner (out of range or too fast), ceiling, floor, flat, filter_edge (the first and last 1 s of each recording file, so a flag can end at the file end), too_short. junction and processing_failed as for every channel.",
+      "Rule": "Bad where any reason holds: kleckner (out of range or too fast, judged on a smoothed copy: a 2-s moving average run forward and backward), ceiling (within 2 s of the sensor's upper limit), floor (within 2 s of a reading below 0.05 uS), flat, filter_edge (the first and last 1 s of each recording file; inside the tsv only where the trim comes that close to a file's start or end), too_short (a file of 6 s or less). junction and processing_failed as for every channel.",
       "ProportionBad": 0.0
      },
      "emg_cor": {
@@ -351,26 +346,18 @@
        "clipped_record": [],
        "too_short": []
       },
-      "Rule": "Bad where any reason holds: clipped and clip_guard (sensor limit, +-1.5 s), nonfinite and its guard, mains (electrical noise left after filtering), line (narrowband interference lasting at least 3 of 5 neighbouring 2-s windows), filter_edge (the first and last 1.5 s of each recording file, so a flag can end at the file end), flat_record (the whole file: at least 90 % of the 2-s windows in the trim are flat, a dead channel), clipped_record (the whole file: at least 90 % of the trim at the sensor limit), too_short. No reason detects missing electrodes. Pass 2 applies every machine stretch whatever the RA does. junction and processing_failed as for every channel.",
+      "Rule": "Bad where any reason holds: clipped (a 2-s window holding a sample at the sensor limit) and clip_guard (1.5 s either side), nonfinite (a 2-s window holding a missing sample) and nonfinite_guard (1.5 s either side), mains (electrical noise left after filtering), line (narrowband interference lasting at least 3 of 5 neighbouring 2-s windows), filter_edge (the first and last 1.5 s of each recording file; inside the tsv only where the trim comes that close to a file's start or end), flat_record (the whole file: at least 90 % of the 2-s windows holding an on-task row are flat, a dead channel), clipped_record (the whole file: at least 90 % of the on-task rows are clipped or clip_guard; on-task rows: the baseline and the task phases other than the ratings, left out: dr_grid and ct_grid). too_short cannot occur here (a record under 3 s fails first). No reason detects missing electrodes. Pass 2 applies every machine stretch whatever the RA does. junction and processing_failed as for every channel.",
       "ProportionBad": 1.0
      }
     }
    },
    "depends_on_padding": {},
    "differs_from_sidecar": {
-    "ecg": [
-     "flat"
-    ],
+    "ecg": [],
     "ppg": [],
-    "rsp": [
-     "filter_edge",
-     "rail",
-     "swing"
-    ],
+    "rsp": [],
     "eda": [],
-    "emg_cor": [
-     "flat_record"
-    ]
+    "emg_cor": []
    }
   }
  }
