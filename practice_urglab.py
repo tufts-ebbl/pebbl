@@ -93,8 +93,8 @@ COLUMNS = ["ecg", "ppg", "rsp", "eda", "emg_cor", "emg_cor_env", "ecg_peaks", "p
 TECHNICAL_DESCRIPTION = "Practice file, simulated by PEBBL (practice_urglab.py): not participant data."
 
 # The study's texts, word for word, from physiopipe's writer-made reference sidecar
-# (fixtures/urglab_reference_sidecar.json: physiopipe d9c276d, urglab physio cc6a468, profile 21078f4f17b8).
-# test_urglab_practice.py checks they still match it.
+# (fixtures/urglab_reference_sidecar.json: physiopipe 6bf462e, urglab physio c12ac16, profile 284d59d44375;
+# refreshed 2026-11-10, HLU: "Yes, go ahead"). test_urglab_practice.py checks they still match it.
 COLUMN_TEXTS = {
     'ecg': ('mV',
         "The heart's electrical signal (ECG), filtered to remove electrical noise from the room. Each sharp "
@@ -116,8 +116,11 @@ COLUMN_TEXTS = {
         'heartbeat, the whole recording is marked bad; leave that mark.'),
     'eda': ('microsiemens',
         'Skin conductance (the sweat response). Rises lasting a few seconds are normal responses. Stretches '
-        'are already marked as bad where the signal is out of range, flat, or changes impossibly fast, and in'
-        ' the first and last second of each recording; brief glitches are not marked.'),
+        'are already marked as bad where the signal is out of range (including drops to near zero and '
+        "readings at the sensor's upper limit), flat, or changes impossibly fast; short glitches that stay "
+        'within range are often not marked. The first and last second of each recording file are also marked,'
+        ' because the filter needs time to settle there; you will see this only where the task starts or ends'
+        ' that close to the start or end of the file.'),
     'emg_cor': ('mV',
         'Muscle activity over the eyebrow (corrugator, the frown muscle), filtered to keep the muscle signal '
         'and remove electrical noise. Bursts are normal, including large ones and ones with movement on other'
@@ -154,30 +157,40 @@ COLUMN_TEXTS = {
 }
 MACHINE_RULES = {
     'ecg': (
-        "Bad where the cleaned ECG is flat (0.5-s windows from each file's first sample with SD < 0.001 mV). "
-        'junction: the one-sample join of two files. processing_failed: the channel could not be processed.'),
+        "Bad where the cleaned ECG is flat (0.5-s windows from each file's first sample with SD < 0.001 mV; a"
+        ' final part shorter than 0.5 s is not tested). junction: the one-sample join of two files. '
+        'processing_failed: the channel could not be processed.'),
     'ppg': (
         'Bad where any reason holds: window_rule (pulse too small in a 10-s window), rail (within 3 s of the '
         "sensor limit), ecg_coupling (pulses do not follow the ECG's heartbeats; tested only where the ECG is"
         ' usable). junction and processing_failed as for every channel.'),
     'rsp': (
-        'Bad where any reason holds: flat, flat_raw (dead belt, 2-s windows), snr (20-s windows), rail '
-        '(within 5 s of the sensor limit), swing (within 1 s of a sudden belt step faster and bigger than a '
-        'breath), filter_edge (the first and last 20 s of each recording file, so a flag can end at the file '
-        "end), ecg_unconfirmed (the belt does not follow the ECG's breathing pattern; whole trim; judged only"
-        ' where the ECG is usable). junction and processing_failed as for every channel.'),
+        'Bad where any reason holds: flat, flat_raw (dead belt, 2-s windows), rail (within 5 s of the sensor '
+        'limit), swing (within 1 s of a sudden belt step faster and bigger than a breath), filter_edge (the '
+        'first and last 20 s of each recording file; inside the tsv only where the trim comes that close to a'
+        " file's start or end), ecg_unconfirmed (the belt does not follow the ECG's breathing pattern; marks "
+        "that file's whole trim; tested only when the trim holds at least 45 clean 20-s stretches at 5-s "
+        'steps, i.e. 240 s or more, free of flat, flat_raw, rail and filter_edge marks and with a usable ECG;'
+        ' not tested without an ECG). snr (20-s windows) is kept from physioProcess but cannot mark anything:'
+        ' its score never falls below its 4.77-dB cut. junction and processing_failed as for every channel.'),
     'eda': (
-        'Bad where any reason holds: kleckner (out of range or too fast), ceiling, floor, flat, filter_edge '
-        '(the first and last 1 s of each recording file, so a flag can end at the file end), too_short. '
-        'junction and processing_failed as for every channel.'),
+        'Bad where any reason holds: kleckner (out of range or too fast, judged on a smoothed copy: a 2-s '
+        "moving average run forward and backward), ceiling (within 2 s of the sensor's upper limit), floor "
+        '(within 2 s of a reading below 0.05 uS), flat, filter_edge (the first and last 1 s of each recording'
+        " file; inside the tsv only where the trim comes that close to a file's start or end), too_short (a "
+        'file of 6 s or less). junction and processing_failed as for every channel.'),
     'emg_cor': (
-        'Bad where any reason holds: clipped and clip_guard (sensor limit, +-1.5 s), nonfinite and its guard,'
-        ' mains (electrical noise left after filtering), line (narrowband interference lasting at least 3 of '
-        '5 neighbouring 2-s windows), filter_edge (the first and last 1.5 s of each recording file, so a flag'
-        ' can end at the file end), flat_record (the whole file: at least 90 % of the 2-s windows in the trim'
-        ' are flat, a dead channel), clipped_record (the whole file: at least 90 % of the trim at the sensor '
-        'limit), too_short. No reason detects missing electrodes. Pass 2 applies every machine stretch '
-        'whatever the RA does. junction and processing_failed as for every channel.'),
+        'Bad where any reason holds: clipped (a 2-s window holding a sample at the sensor limit) and '
+        'clip_guard (1.5 s either side), nonfinite (a 2-s window holding a missing sample) and '
+        'nonfinite_guard (1.5 s either side), mains (electrical noise left after filtering), line (narrowband'
+        ' interference lasting at least 3 of 5 neighbouring 2-s windows), filter_edge (the first and last 1.5'
+        " s of each recording file; inside the tsv only where the trim comes that close to a file's start or "
+        'end), flat_record (the whole file: at least 90 % of the 2-s windows holding an on-task row are flat,'
+        ' a dead channel), clipped_record (the whole file: at least 90 % of the on-task rows are clipped or '
+        'clip_guard; on-task rows: the baseline and the task phases other than the ratings, left out: dr_grid'
+        ' and ct_grid). too_short cannot occur here (a record under 3 s fails first). No reason detects '
+        'missing electrodes. Pass 2 applies every machine stretch whatever the RA does. junction and '
+        'processing_failed as for every channel.'),
 }
 COORDINATE_SPACE = 'tsv row index at SamplingFrequency; segments are [start, end)'
 CODEBOOK = {"bit_order": "msb_first", "baseline_code": 50, "cleared_code": 0, "test_burst_codes": [10, 20, 50],

@@ -18,27 +18,27 @@
   "ecg": {
     "Units": "mV",
     "Description": "The heart's electrical signal (ECG), filtered to remove electrical noise from the room. Each sharp spike is one heartbeat. Stretches where the signal is flat (no heartbeat recorded) are already marked as bad.",
-    "TechnicalDescription": "ECG - ECG100C, rate-converted to 1000 Hz (Kaiser FIR, 450-500 Hz, 60 dB); cleaned at 1000 Hz: Butterworth high-pass 0.5 Hz (order 4), notches at 60 Hz and harmonics below 40 Hz, Butterworth low-pass 40 Hz (order 4), all zero-phase (physiopipe.ecg.clean_ecg, D1a, final); whole file filtered, then trimmed. MachineQC.ecg: flat = 0.5-s windows with SD < 0.001 mV (ecg_flat_mask, physioProcess's Bio-SP flat test). No ECG edge flag in pass 1: positions of file edges and junctions are in Provenance.SourceFiles for pass 2's 5.0-s rule."
+    "TechnicalDescription": "ECG - ECG100C, rate-converted to 1000 Hz (Kaiser FIR, 450-500 Hz, 60 dB); cleaned at 1000 Hz: Butterworth high-pass 0.5 Hz (order 4), a notch at 60 Hz (-3 dB width 2 Hz per pass), Butterworth low-pass 40 Hz (order 4), all zero-phase (physiopipe.ecg.clean_ecg, D1a, final); whole file filtered, then trimmed. MachineQC.ecg: flat = 0.5-s windows from each file's first sample with SD < 0.001 mV, a final part under 0.5 s untested (ecg_flat_mask, physioProcess's Bio-SP flat test). QRS complexes (Pass2Inputs QRS; they decide ECG usability and serve the PPG's ecg_coupling and the breathing test): 5-20 Hz energy peaks at least 300 ms apart and above 0.25 x the 99th percentile of the energy over the on-task rows (each file's Pass2Inputs ThresholdBasis). No ECG edge flag in pass 1: positions of file edges and junctions are in Provenance.SourceFiles for pass 2's 5.0-s rule."
   },
   "ppg": {
     "Units": "V",
     "Description": "Finger pulse signal, filtered so that each heartbeat's pulse is easy to see. Stretches are already marked as bad where the pulse is too small to see, the sensor hit its limit, or the pulses do not follow the heartbeats in the ECG; check each one. Pulse marks inside a bad stretch are not shown: if you delete a bad stretch, add the pulse marks there by hand.",
-    "TechnicalDescription": "PPG - PPG100C, rate-converted to 1000 Hz (Kaiser FIR, 450-500 Hz, 60 dB); neurokit 'elgendi' clean (Butterworth band-pass 0.5-8 Hz, order 3, zero-phase); whole file filtered, then trimmed. MachineQC.ppg: window_rule (10-s windows, peak-to-peak >= max(0.05 x (p95 - p5), 0.05 V)), rail (|raw| >= 9.95 V, +-3 s), ecg_coupling (peaks not following the ECG QRS at the participant's own delay; tested only in windows where the ECG is usable: no flat ECG sample, QRS rate 40-150/min, beat consistency >= 0.70 (physiopipe.ecg.ecg_usable); not tested without an ECG). No PPG edge flag in pass 1 (pass 2's 5.0-s rule)."
+    "TechnicalDescription": "PPG - PPG100C, rate-converted to 1000 Hz (Kaiser FIR, 450-500 Hz, 60 dB); neurokit 'elgendi' clean (Butterworth band-pass 0.5-8 Hz, order 3, zero-phase); whole file filtered, then trimmed. MachineQC.ppg: window_rule (10-s windows from the file's first sample, a final part under 3 s joined to the last; bad where the cleaned signal's peak-to-peak < max(0.05 x (p95 - p5 of the cleaned signal over the on-task rows (each file's Pass2Inputs ThresholdBasis)), 0.05 V)), rail (|raw| >= 9.95 V, +-3 s), ecg_coupling (peaks not following the ECG QRS at the participant's own delay: D = the median shortest QRS-to-peak delay in 100-500 ms over the tested windows' peaks in the on-task rows (every tested peak when none lies there; Pass2Inputs DelayBasis); a tested window is bad when it holds no peak or fewer than half its peaks lie D +- 60 ms after a QRS, and every tested window is bad when there is no D; tested only in windows where the ECG is usable: no flat ECG sample, QRS rate 40-150/min, beat consistency >= 0.70 (physiopipe.ecg.ecg_usable); not tested without an ECG). No PPG edge flag in pass 1 (pass 2's 5.0-s rule)."
   },
   "rsp": {
     "Units": "V",
     "Description": "Breathing belt around the participant's chest. Review it on rsp_raw, the belt as recorded; this filtered copy is for analysis. Each rise and fall is one breath. Some stretches are already marked as bad: where the belt is flat or at its limit, and where it makes a sudden step much faster and bigger than a breath. Remove a mark where ordinary breathing is clearly visible. Then mark (1) any stretch with no breathing in it, a flat line or only fine noise, from where the breathing stops to where it returns, even where part of it is already marked; (2) any other large sudden drop or jump that is not breathing, often at a task event. If the belt never follows the breathing seen in the heartbeat, the whole recording is marked bad; leave that mark.",
-    "TechnicalDescription": "RSP - RSP100C, rate-converted to 1000 Hz (Kaiser FIR, 450-500 Hz, 60 dB); Butterworth 0.07-1 Hz (order 2), then neurokit 'khodadad2018' clean (0.05-3 Hz, order 2), zero-phase; whole file filtered, then trimmed. MachineQC.rsp reasons: flat, flat_raw, snr, rail (|raw| >= 9.95 V, +-5 s), swing (on the raw belt low-passed at 5 Hz: a speed burst at most 0.25 s wide at half its height that moves the belt by more than 1.5 x the median half-breath of the machine extrema in the trim; +-1 s; not tested below 0.05 V; physiopipe.rsp.swing_events), filter_edge (20 s at each file edge), ecg_unconfirmed (record-level surrogate coherence test over the trim, leaving out samples where the ECG is not usable (physiopipe.ecg.ecg_usable); physiopipe.rsp)."
+    "TechnicalDescription": "RSP - RSP100C, rate-converted to 1000 Hz (Kaiser FIR, 450-500 Hz, 60 dB); Butterworth 0.07-1 Hz (order 2), then neurokit 'khodadad2018' clean (0.05-3 Hz, order 2), zero-phase; whole file filtered, then trimmed. MachineQC.rsp reasons: flat (2-s windows from the file's first sample, a final part untested: SD of the 0.07-1 Hz signal < 1e-4 V), flat_raw (the same windows on the rate-converted belt: SD < 3.01e-4 V; a window holding a rail sample is not tested), rail (|raw| >= 9.95 V, +-5 s), swing (on the raw belt low-passed at 5 Hz: a speed burst at most 0.25 s wide at half its height that moves the belt by more than 1.5 x the median half-breath between consecutive machine extrema in the trim that both lie in the on-task rows (every pair in the trim when fewer than 3 do; Pass2Inputs Swing.BBasis); +-1 s; not tested below 0.05 V; physiopipe.rsp.swing_events), filter_edge (20 s at each file edge), ecg_unconfirmed (record-level surrogate coherence test over each file's trim, leaving out samples marked flat, flat_raw, rail or filter_edge and samples where the ECG is not usable (physiopipe.ecg.ecg_usable); not confirmed -> that file's whole trim is bad; tested only with at least 45 clean 20-s segments at 5-s steps (240 s or more, more when the clean time is broken up); not tested without an ECG; physiopipe.rsp). snr (physioProcess's 20-s Welch test, cut 4.77 dB) is computed and its windows are in Pass2Inputs, but it cannot mark anything: for N non-negative power bins sum / SD >= sqrt(N), so the score is at least 5 log10(N) dB, 6.39 dB for a 20-s window (19 bins)."
   },
   "eda": {
     "Units": "microsiemens",
-    "Description": "Skin conductance (the sweat response). Rises lasting a few seconds are normal responses. Stretches are already marked as bad where the signal is out of range, flat, or changes impossibly fast, and in the first and last second of each recording; brief glitches are not marked.",
-    "TechnicalDescription": "SCL - GSR100C, rate-converted to 1000 Hz (Kaiser FIR, 450-500 Hz, 60 dB); neurokit 'neurokit' clean (Butterworth low-pass 3 Hz, order 4, zero-phase), no comb, no detrend (slope and intercept in Pass2Inputs); whole file filtered, then trimmed. MachineQC.eda reasons: kleckner (rules 1, 2, 4; rule-4 gaps fixed), ceiling, floor, flat, filter_edge (1 s at each file edge), too_short."
+    "Description": "Skin conductance (the sweat response). Rises lasting a few seconds are normal responses. Stretches are already marked as bad where the signal is out of range (including drops to near zero and readings at the sensor's upper limit), flat, or changes impossibly fast; short glitches that stay within range are often not marked. The first and last second of each recording file are also marked, because the filter needs time to settle there; you will see this only where the task starts or ends that close to the start or end of the file.",
+    "TechnicalDescription": "SCL - GSR100C, rate-converted to 1000 Hz (Kaiser FIR, 450-500 Hz, 60 dB); neurokit 'neurokit' clean (Butterworth low-pass 3 Hz, order 4, zero-phase), no comb, no detrend; whole file filtered, then trimmed. Pass2Inputs per file: SlopeUSPerS and InterceptUS, a straight line fitted to the rate-converted, unfiltered signal over that whole file, and SlopeUSPerSOnTask and InterceptUSOnTask over its on-task rows (each file's Pass2Inputs ThresholdBasis) only, time 0 at the file's first sample (in Provenance.SourceFiles, the file's FileRows1000Hz[0] is the file row at its first tsv row TsvRows[0]); the SCR table, one entry per eda_peaks SCR: onset, peak and recovery (half-recovery, null if none) as tsv rows, which can lie outside that file's tsv rows (an onset before them, a recovery after them), amplitude and height in uS (phasic = the clean signal high-passed at 0.05 Hz, Butterworth order 2, zero-phase), clean_rise in uS, rise_time in s. MachineQC.eda reasons: kleckner (rules 1, 2, 4 on a 2-s moving average run forward and backward: outside 0.05-60 uS or |slope| > 10 uS/s, spread 0.5 s; rule-4 gaps fixed), ceiling (within 2 s of a native sample >= 49.75 uS), floor (within 2 s of a native sample < 0.05 uS), flat (10-s windows from the file's first sample, a final part joined to the last: SD < 0.001 uS), filter_edge (1 s at each file edge), too_short (a file of 6 s or less)."
   },
   "emg_cor": {
     "Units": "mV",
     "Description": "Muscle activity over the eyebrow (corrugator, the frown muscle), filtered to keep the muscle signal and remove electrical noise. Bursts are normal, including large ones and ones with movement on other channels; so are quiet stretches and held frowns (activity lasting seconds that builds and fades, with fine texture after it). Stretches the computer found are already marked: leave them; they count whatever you do. Mark as bad: (1) electrode pops: on emg_cor_full, sharp spikes far taller than the bursts around them, often in trains; mark from just before the first spike to the end of the ringing; (2) a regular, repeating pattern lasting several seconds that is not already marked; (3) on emg_cor, a stretch that is perfectly smooth (no fine texture), only when it begins right after a sudden step, a spike or the sudden end of a band; mark it up to the next sudden change or the end of the recording. Do not mark a stretch because it is quiet.",
-    "TechnicalDescription": "COR - ERS100C at its native rate (2000 Hz or 10000 Hz): notches at 60 Hz and harmonics to 500 Hz, Butterworth high-pass 20 Hz (order 4), Kaiser FIR anti-alias (450-500 Hz, 60 dB), decimated to 1000 Hz; mirror-padded, zero-phase; band 20-450 Hz. MachineQC.emg_cor reasons (emg_qc v6, 2-s windows): nonfinite, nonfinite_guard, clipped (|raw| >= 2 mV x 0.999), clip_guard (1.5 s), mains (line power > 1 x the rest of 20-250 Hz after notching), line (narrowband peak >= 10 dB above its neighbourhood in 30-450 Hz away from the mains harmonics and >= 0.005 mV RMS, in >= 3 of the 5 windows centred on a window), filter_edge (1.5 s at each file edge), flat_record (the whole file when >= 0.9 of the windows overlapping the trim have band-limited SD < 0.001 mV), clipped_record (the whole file when >= 0.9 of the trim's samples are clipped or clip_guard), too_short; native spans widened outward to whole 1000-Hz rows. FlatShare and ClippedShare are in Pass2Inputs."
+    "TechnicalDescription": "COR - ERS100C at its native rate (2000 Hz or 10000 Hz): notches at 60 Hz and harmonics to 500 Hz, Butterworth high-pass 20 Hz (order 4), Kaiser FIR anti-alias (450-500 Hz, 60 dB), decimated to 1000 Hz; mirror-padded, zero-phase; band 20-450 Hz. MachineQC.emg_cor reasons (emg_qc v6, 2-s windows from the file's first sample, the last absorbing a short tail): nonfinite (a window holding a non-finite raw sample), nonfinite_guard (1.5 s), clipped (a window holding a raw sample with |raw| >= 2 mV x 0.999), clip_guard (1.5 s), mains (after notching, power within +-2 Hz of each mains harmonic in 20-250 Hz > 1 x the rest of 20-250 Hz; not judged on a flat window), line (narrowband peak >= 10 dB above its neighbourhood in 30-450 Hz away from the mains harmonics and >= 0.005 mV RMS, in >= 3 of the 5 windows centred on a window), filter_edge (1.5 s at each file edge), flat_record (the whole file when >= 0.9 of the windows holding an on-task row have band-limited SD < 0.001 mV), clipped_record (the whole file when >= 0.9 of the samples in the on-task rows (each file's Pass2Inputs ThresholdBasis) are clipped or clip_guard); too_short cannot occur through the writer (a record under 3 s fails first, processing_failed); native spans widened outward to whole 1000-Hz rows. FlatShare and ClippedShare are in Pass2Inputs."
   },
   "emg_cor_env": {
     "Units": "mV",
@@ -53,12 +53,12 @@
   "ppg_peaks": {
     "Units": "boolean",
     "Description": "Marks at the top of each pulse, found automatically, to be checked and corrected by RAs.",
-    "TechnicalDescription": "PPG systolic peaks, 0/1: neurokit 'elgendi' detection, then systole correct_peaks (4 iterations); detected on the whole file, then trimmed; machine output pending RA review."
+    "TechnicalDescription": "PPG systolic peaks, 0/1: neurokit 'elgendi' detection (copied, its threshold's mean square taken over the on-task rows (each file's Pass2Inputs ThresholdBasis)), then systole correct_peaks (4 iterations); detected on the whole file, then trimmed; machine output pending RA review."
   },
   "rsp_peaks": {
     "Units": "boolean",
     "Description": "Marks at the top of each breath, found automatically. Not reviewed by RAs, who mark bad stretches of the breathing signal instead.",
-    "TechnicalDescription": "Breath peaks, 0/1: neurokit rsp_peaks 'khodadad2018', amplitude_min 0.3; troughs in Pass2Inputs; machine output, not reviewed."
+    "TechnicalDescription": "Breath peaks, 0/1: neurokit rsp_peaks 'khodadad2018' (copied), amplitude_min 0.3 of the median step between neighbouring extrema in the on-task rows (each file's Pass2Inputs ThresholdBasis); troughs in Pass2Inputs; machine output, not reviewed."
   },
   "eda_peaks": {
     "Units": "boolean",
@@ -68,7 +68,7 @@
   "event": {
     "Units": "code",
     "Description": "Task code at each moment. 0 = no code. 50 = resting baseline. Trial codes have two digits: the first is the condition (1 = urgent, 2 = not urgent), the second the phase (0 = fixation, 1 = urgency message, 2 = planning, 3 = tracing, 4 = DR grid, 5 = CT grid). Codes 10, 20 and 50 also appear as half-second test pulses when the recording is checked.",
-    "TechnicalDescription": "Event code at each row from the decoded event table (Events.Rows): a row's code over its span, 0 where no code is set; a transitional state takes the code that follows it; sampled at each 1000-Hz row's event-channel sample (row m <-> event sample m x event_rate / 1000)."
+    "TechnicalDescription": "Event code at each row from the decoded event table (Events.Rows): a row's code over its span, 0 where no code is set; a transitional state takes the code that follows it; sampled at each 1000-Hz row's event-channel sample (file row m <-> event sample m x event_rate / 1000; the tsv's first row of each file is that file's row FileRows1000Hz[0] in Provenance.SourceFiles)."
   },
   "rsp_raw": {
     "Units": "V",
@@ -668,7 +668,7 @@
         "SegmentsByReason": {
           "flat": []
         },
-        "Rule": "Bad where the cleaned ECG is flat (0.5-s windows from each file's first sample with SD < 0.001 mV). junction: the one-sample join of two files. processing_failed: the channel could not be processed.",
+        "Rule": "Bad where the cleaned ECG is flat (0.5-s windows from each file's first sample with SD < 0.001 mV; a final part shorter than 0.5 s is not tested). junction: the one-sample join of two files. processing_failed: the channel could not be processed.",
         "ProportionBad": 0.0
       },
       "ppg": {
@@ -786,7 +786,7 @@
           ],
           "ecg_unconfirmed": []
         },
-        "Rule": "Bad where any reason holds: flat, flat_raw (dead belt, 2-s windows), snr (20-s windows), rail (within 5 s of the sensor limit), swing (within 1 s of a sudden belt step faster and bigger than a breath), filter_edge (the first and last 20 s of each recording file, so a flag can end at the file end), ecg_unconfirmed (the belt does not follow the ECG's breathing pattern; whole trim; judged only where the ECG is usable). junction and processing_failed as for every channel.",
+        "Rule": "Bad where any reason holds: flat, flat_raw (dead belt, 2-s windows), rail (within 5 s of the sensor limit), swing (within 1 s of a sudden belt step faster and bigger than a breath), filter_edge (the first and last 20 s of each recording file; inside the tsv only where the trim comes that close to a file's start or end), ecg_unconfirmed (the belt does not follow the ECG's breathing pattern; marks that file's whole trim; tested only when the trim holds at least 45 clean 20-s stretches at 5-s steps, i.e. 240 s or more, free of flat, flat_raw, rail and filter_edge marks and with a usable ECG; not tested without an ECG). snr (20-s windows) is kept from physioProcess but cannot mark anything: its score never falls below its 4.77-dB cut. junction and processing_failed as for every channel.",
         "ProportionBad": 0.36354426229508197
       },
       "eda": {
@@ -799,7 +799,7 @@
           "filter_edge": [],
           "too_short": []
         },
-        "Rule": "Bad where any reason holds: kleckner (out of range or too fast), ceiling, floor, flat, filter_edge (the first and last 1 s of each recording file, so a flag can end at the file end), too_short. junction and processing_failed as for every channel.",
+        "Rule": "Bad where any reason holds: kleckner (out of range or too fast, judged on a smoothed copy: a 2-s moving average run forward and backward), ceiling (within 2 s of the sensor's upper limit), floor (within 2 s of a reading below 0.05 uS), flat, filter_edge (the first and last 1 s of each recording file; inside the tsv only where the trim comes that close to a file's start or end), too_short (a file of 6 s or less). junction and processing_failed as for every channel.",
         "ProportionBad": 0.0
       },
       "emg_cor": {
@@ -816,7 +816,7 @@
           "clipped_record": [],
           "too_short": []
         },
-        "Rule": "Bad where any reason holds: clipped and clip_guard (sensor limit, +-1.5 s), nonfinite and its guard, mains (electrical noise left after filtering), line (narrowband interference lasting at least 3 of 5 neighbouring 2-s windows), filter_edge (the first and last 1.5 s of each recording file, so a flag can end at the file end), flat_record (the whole file: at least 90 % of the 2-s windows in the trim are flat, a dead channel), clipped_record (the whole file: at least 90 % of the trim at the sensor limit), too_short. No reason detects missing electrodes. Pass 2 applies every machine stretch whatever the RA does. junction and processing_failed as for every channel.",
+        "Rule": "Bad where any reason holds: clipped (a 2-s window holding a sample at the sensor limit) and clip_guard (1.5 s either side), nonfinite (a 2-s window holding a missing sample) and nonfinite_guard (1.5 s either side), mains (electrical noise left after filtering), line (narrowband interference lasting at least 3 of 5 neighbouring 2-s windows), filter_edge (the first and last 1.5 s of each recording file; inside the tsv only where the trim comes that close to a file's start or end), flat_record (the whole file: at least 90 % of the 2-s windows holding an on-task row are flat, a dead channel), clipped_record (the whole file: at least 90 % of the on-task rows are clipped or clip_guard; on-task rows: the baseline and the task phases other than the ratings, left out: dr_grid and ct_grid). too_short cannot occur here (a record under 3 s fails first). No reason detects missing electrodes. Pass 2 applies every machine stretch whatever the RA does. junction and processing_failed as for every channel.",
         "ProportionBad": 0.0
       }
     },
@@ -851,26 +851,26 @@
     }
   },
   "Provenance": {
-    "PipelineCommit": "d9c276d96f0b455f05cd684018d0bb02616059f9",
-    "StudyRepoCommit": "cc6a4684701597865b67c7f7c2f270ba8b4b1f7c",
+    "PipelineCommit": "6bf462e4e48b052651866c5071c0e4e4fe2f9972",
+    "StudyRepoCommit": "c12ac16b68289d7cd91eeebe672ff3e4cd43b160",
     "CodeSha256": {
       "__init__.py": "d87cc8a6690acfa5a42233ca81c4a6cf56e5de75b2566411822013906f63c0ba",
       "acq.py": "d18c1edbf2f711e2db9e410089f4594d85fef79c134e3d80d0ecb666757e91d7",
-      "ecg.py": "6217cebba053c4b75bab1aab9394ebf69140ae0772409d2715d788e8193492ff",
-      "eda.py": "06d7c6367c8fa9c5abd172b6cb2ed11e7eb58e724cadc1506a26f079fd019d0f",
-      "emg.py": "abf8cd00cf76ea805175b93e2c4c6f83ccbe18ccf5cb945deae676c3d8002514",
+      "ecg.py": "35ccb481cfcea27b8e78e1573a8eb83baa805ade2cef048de86cd5012b363715",
+      "eda.py": "b8708668d78091beb18fd856477ab4abedcf398bf80290da6e056dc0ed0dd397",
+      "emg.py": "7eaefb0e8a1ccd4ec6d1565132851a3901cf2cd04077162a2732c96770e95802",
       "filters.py": "3829d3b8397e488ccf74bbdea36e12298c7da7e1dc4356848b8800f4bbe030ca",
       "pass1.py": "3b8b03cb9a75540e83c2cd7f07b5cf6facba4197cf6a05f544fbdc8b581e1219",
       "plugins.py": "864b19417bce52e399ce2c6c431b165e96f60b37068f08755aed0517c47da987",
-      "ppg.py": "61e1cacef9d327bdad588111a378686adfac904938526c76b6ff34f1a4f49d83",
+      "ppg.py": "0914574da3ca4cf2ae295b2c1086b2a42e386b0a3055b0a6d2d64615d62e7847",
       "profile.py": "9e8bdcd535e13bbd6e40cf28fe098cf762d07c692cfeb300920b7207971ecc13",
       "provenance.py": "35db6e23691ee18e047b97460e5234be76615a1f2b68bae331af6a0d7be8d851",
       "records.py": "cabcbd095b48fc0a02e60565c6e3f497b78ea7b028003755b3ffe8644e6b82b9",
-      "rsp.py": "c6c08a856c93a0332760baa62550293b7f3a17d026aa6c209cb37c08e9b7f6e2",
-      "writer.py": "bd6cd2f7ccfa8ed54e7a8a518ee35f202633eac74c7a47a33321838e500449db"
+      "rsp.py": "6f740fd3ab7b2a1c963b82e20417b04d88ab246b9d0db5bb68054e164a67192f",
+      "writer.py": "998a851120fa22892a8fde2780260cd864d55eae634337e254d96acb801ac65f"
     },
     "ProfileFile": "urglab_profile.toml",
-    "ProfileSha256": "21078f4f17b896686be08955c4f6ac8fb924fd1ef95408558626931dfcc8486c",
+    "ProfileSha256": "284d59d44375de46f8b0b6d53a842f45b04d62481640c9c2883dfdaf837f48bb",
     "PluginFile": "urglab_plugins.py",
     "PluginSha256": "6ee3a65e691301a606a5e3095eba93b9cdfb8901b64f87b25896f9578ffa318c",
     "Dataset": "synthetic",
@@ -1107,7 +1107,7 @@
       "rsp_raw": "afe7f3e1d16ebb167498f6601c087809425b6941a39134ad959158a8d7894e57"
     },
     "Run": {
-      "ProcessedAtLocal": "2026-11-08T19:35:53",
+      "ProcessedAtLocal": "2026-11-10T21:04:51",
       "CPU": "Intel(R) Core(TM) Ultra 7 268V"
     }
   },
@@ -1809,13 +1809,19 @@
           303536,
           304492
         ],
-        "SystoleSkipped": false
+        "SystoleSkipped": false,
+        "QRSHeight": 0.0003232663377335092,
+        "QRSHeightBasis": "given"
       },
       "ppg": {
         "FloorV": 0.05,
         "DelayMs": 298.0,
         "SystoleSkipped": false,
-        "ECGAvailable": true
+        "ECGAvailable": true,
+        "DetectorMeanSq": 0.022134045388358694,
+        "DetectorBasis": "given",
+        "FloorBasis": "given",
+        "DelayBasis": "given"
       },
       "rsp": {
         "Troughs": [
@@ -1960,8 +1966,11 @@
         "ExtremaSkipped": false,
         "Swing": {
           "Tested": true,
-          "TypicalHalfBreathV": 0.9924883230421097
-        }
+          "TypicalHalfBreathV": 1.0618067494156351,
+          "BBasis": "given"
+        },
+        "BreathStepMedianV": 0.9861679453733885,
+        "BreathStepBasis": "given"
       },
       "eda": {
         "SCR": {
@@ -2011,13 +2020,13 @@
             1.25
           ],
           "recovery": [
-            65262.0,
-            94284.0,
-            128271.0,
-            162280.0,
-            196286.0,
-            230274.0,
-            264288.0
+            60262.0,
+            89284.0,
+            123271.0,
+            157280.0,
+            191286.0,
+            225274.0,
+            259288.0
           ],
           "height": [
             0.09771881489397476,
@@ -2037,621 +2046,624 @@
         },
         "SCRSkipped": false,
         "SlopeUSPerS": -0.0010468612443451468,
-        "InterceptUS": 5.974008821508111
+        "InterceptUS": 5.974008821508111,
+        "SlopeUSPerSOnTask": -0.0024241130381860224,
+        "InterceptUSOnTask": 6.2251270538711605
       },
       "emg_cor": {
         "RawMainsShare": [
           [
             1000,
-            0.061968726907691236
+            0.0998580740889295
           ],
           [
             3000,
-            0.05844397702237676
+            0.10297391057873498
           ],
           [
             5000,
-            0.041781062355317256
+            0.06894575914663668
           ],
           [
             7000,
-            0.05491789206164473
+            0.08814971785765542
           ],
           [
             9000,
-            0.057057492243949536
+            0.08765771134236788
           ],
           [
             11000,
-            0.0642267180199399
+            0.08635227708915266
           ],
           [
             13000,
-            0.051737816215458664
+            0.08288090454709318
           ],
           [
             15000,
-            0.045540617647092434
+            0.06685938089514107
           ],
           [
             17000,
-            0.0491741318547733
+            0.0733083898420826
           ],
           [
             19000,
-            0.059259587183186836
+            0.09855646584565464
           ],
           [
             21000,
-            0.03412247005456575
+            0.05450008072549194
           ],
           [
             23000,
-            0.050708718910419226
+            0.09280417608855397
           ],
           [
             25000,
-            0.06079909477213376
+            0.10035398177343849
           ],
           [
             27000,
-            0.03158456160490995
+            0.07283805668036758
           ],
           [
             29000,
-            0.07529525075962845
+            0.12021239403332828
           ],
           [
             31000,
-            0.07467638637148677
+            0.11867785083293726
           ],
           [
             33000,
-            0.03664525563308122
+            0.09401547707588907
           ],
           [
             35000,
-            0.07697433289936309
+            0.1288276344826083
           ],
           [
             37000,
-            0.06372685909204634
+            0.09207733639439802
           ],
           [
             39000,
-            0.046964737572992986
+            0.07935112326225252
           ],
           [
             41000,
-            0.040106775997113285
+            0.06837184203431204
           ],
           [
             43000,
-            0.048732080269707684
+            0.06536310483054918
           ],
           [
             45000,
-            0.045634396533986196
+            0.07699792641870866
           ],
           [
             47000,
-            0.05298901171321962
+            0.10272026277540733
           ],
           [
             49000,
-            0.051194828509825825
+            0.08457627598572436
           ],
           [
             51000,
-            0.026841382179682967
+            0.047541090460567384
           ],
           [
             53000,
-            0.04675134492081045
+            0.07656642623236148
           ],
           [
             55000,
-            0.048414255356753595
+            0.08197814956678937
           ],
           [
             57000,
-            0.06139235465167587
+            0.09772842946397718
           ],
           [
             59000,
-            0.05719427044190589
+            0.08624409382462193
           ],
           [
             61000,
-            0.03530472667749055
+            0.06443379855366504
           ],
           [
             63000,
-            0.08244658230465919
+            0.12543593999467015
           ],
           [
             65000,
-            0.04171651540830754
+            0.07090950901999103
           ],
           [
             67000,
-            0.04862274487378807
+            0.07708691040010555
           ],
           [
             69000,
-            0.04353059765055482
+            0.08672287199169919
           ],
           [
             71000,
-            0.07626733653829557
+            0.10536578263826632
           ],
           [
             73000,
-            0.04331463562637265
+            0.06820461461662393
           ],
           [
             75000,
-            0.06733040083143618
+            0.10891252199650231
           ],
           [
             77000,
-            0.0469240955233861
+            0.09441261335709324
           ],
           [
             79000,
-            0.04866725060844838
+            0.08523995977555537
           ],
           [
             81000,
-            0.04727009722564631
+            0.0731760758904268
           ],
           [
             83000,
-            0.05719421916565385
+            0.11119594965660422
           ],
           [
             85000,
-            0.05349904009347712
+            0.08010607072985647
           ],
           [
             87000,
-            0.05572616383083157
+            0.10956616250376552
           ],
           [
             89000,
-            0.04991481700841519
+            0.08007831924521196
           ],
           [
             91000,
-            0.044735904578788614
+            0.07922597159842157
           ],
           [
             93000,
-            0.04479810078016041
+            0.08387706009591621
           ],
           [
             95000,
-            0.050629711580618214
+            0.07972196604748807
           ],
           [
             97000,
-            0.058521540576241544
+            0.1044996482750038
           ],
           [
             99000,
-            0.03669547249928826
+            0.07251755329182666
           ],
           [
             101000,
-            0.05377115449192499
+            0.09186883052833372
           ],
           [
             103000,
-            0.05602906593743027
+            0.09557579035472351
           ],
           [
             105000,
-            0.05011837760213472
+            0.07786315420313707
           ],
           [
             107000,
-            0.05353001650051198
+            0.08202586389983725
           ],
           [
             109000,
-            0.06623349779062965
+            0.09589558242071337
           ],
           [
             111000,
-            0.07084286334389096
+            0.10701980841082784
           ],
           [
             113000,
-            0.05417039031719859
+            0.08478553622972414
           ],
           [
             115000,
-            0.04516017893281057
+            0.07316232726888797
           ],
           [
             117000,
-            0.04181766364190071
+            0.07500875547711772
           ],
           [
             119000,
-            0.06620749514287949
+            0.11820185147980608
           ],
           [
             121000,
-            0.05216608232072502
+            0.09292166044145529
           ],
           [
             123000,
-            0.04317242216859687
+            0.07790852433309432
           ],
           [
             125000,
-            0.05495875363740091
+            0.09923525588292706
           ],
           [
             127000,
-            0.039619202155517716
+            0.06403821366607436
           ],
           [
             129000,
-            0.04800591342172899
+            0.07778389835431211
           ],
           [
             131000,
-            0.0391022410171342
+            0.07410385274520301
           ],
           [
             133000,
-            0.04298509525752255
+            0.07576981247254569
           ],
           [
             135000,
-            0.04858602571380574
+            0.08371964839455424
           ],
           [
             137000,
-            0.04568511549937054
+            0.08257693908397352
           ],
           [
             139000,
-            0.05513093934813821
+            0.10576252423409498
           ],
           [
             141000,
-            0.03820376521459703
+            0.07753841175515923
           ],
           [
             143000,
-            0.050976297020785044
+            0.08006811787713355
           ],
           [
             145000,
-            0.05044131437228447
+            0.07831248113730051
           ],
           [
             147000,
-            0.04787655428520319
+            0.08325423416014965
           ],
           [
             149000,
-            0.043986974367974184
+            0.07740302506511998
           ],
           [
             151000,
-            0.03688013853657978
+            0.08999140265780303
           ],
           [
             153000,
-            0.036954000393770864
+            0.062043712483906485
           ],
           [
             155000,
-            0.07004939077164372
+            0.10649064299879794
           ],
           [
             157000,
-            0.04280120660082486
+            0.07618312804657616
           ],
           [
             159000,
-            0.04934324837126213
+            0.07930118087076898
           ],
           [
             161000,
-            0.07672985220699075
+            0.13444293095700538
           ],
           [
             163000,
-            0.04334717558422317
+            0.07044700803030803
           ],
           [
             165000,
-            0.04280811006874734
+            0.08060587010517611
           ],
           [
             167000,
-            0.050450298482483925
+            0.08973538763520021
           ],
           [
             169000,
-            0.03438534834041407
+            0.07832863027952716
           ],
           [
             171000,
-            0.06814452816886606
+            0.09556456225610192
           ],
           [
             173000,
-            0.04507928875572498
+            0.07904348187448318
           ],
           [
             175000,
-            0.034372243228276186
+            0.06802524377315358
           ],
           [
             177000,
-            0.05662281110476305
+            0.08153282296733243
           ],
           [
             179000,
-            0.05822370696380108
+            0.0993240930585311
           ],
           [
             181000,
-            0.05665177421422299
+            0.09455669566184241
           ],
           [
             183000,
-            0.04214249177352608
+            0.08316436555632202
           ],
           [
             185000,
-            0.04981820976285756
+            0.09050932673605855
           ],
           [
             187000,
-            0.06669695409215035
+            0.09308602638335976
           ],
           [
             189000,
-            0.041534131726894206
+            0.07263136704469543
           ],
           [
             191000,
-            0.04527781071495026
+            0.07918174130759813
           ],
           [
             193000,
-            0.049476406979939276
+            0.08468385588408962
           ],
           [
             195000,
-            0.04340224158852209
+            0.08053767157867624
           ],
           [
             197000,
-            0.052069482558549644
+            0.08735368295929621
           ],
           [
             199000,
-            0.050003082108739653
+            0.08826664898213347
           ],
           [
             201000,
-            0.07930232537328803
+            0.1314785264718291
           ],
           [
             203000,
-            0.036311952966390504
+            0.07128191033232481
           ],
           [
             205000,
-            0.0459286117420295
+            0.0767703141661577
           ],
           [
             207000,
-            0.06218654723214263
+            0.09567160940329356
           ],
           [
             209000,
-            0.03928872577359857
+            0.06976309983407791
           ],
           [
             211000,
-            0.039213055404611945
+            0.07787552628958677
           ],
           [
             213000,
-            0.04481613238299365
+            0.07682594606342386
           ],
           [
             215000,
-            0.04444098661695884
+            0.06992162270279707
           ],
           [
             217000,
-            0.04524466607818024
+            0.08091949699669188
           ],
           [
             219000,
-            0.043185794622780674
+            0.0876800707769389
           ],
           [
             221000,
-            0.06540455158685031
+            0.1071691942873183
           ],
           [
             223000,
-            0.08262919130726082
+            0.11016816408570207
           ],
           [
             225000,
-            0.05800425875838779
+            0.09816243422896596
           ],
           [
             227000,
-            0.04741362787459213
+            0.07534782052419564
           ],
           [
             229000,
-            0.06897678567123094
+            0.10868487398663311
           ],
           [
             231000,
-            0.059233064153346796
+            0.09300837440518957
           ],
           [
             233000,
-            0.0798665003166532
+            0.13762932005209555
           ],
           [
             235000,
-            0.056638541673224234
+            0.0864196235111474
           ],
           [
             237000,
-            0.04305686905236163
+            0.07712649244676757
           ],
           [
             239000,
-            0.041522939935389545
+            0.077352934164125
           ],
           [
             241000,
-            0.056855219379943624
+            0.09082225608601462
           ],
           [
             243000,
-            0.05257881742314606
+            0.0799671142130404
           ],
           [
             245000,
-            0.04784808925041816
+            0.08015504553647429
           ],
           [
             247000,
-            0.05583137262733366
+            0.08420890370643427
           ],
           [
             249000,
-            0.0386212746864792
+            0.06985093215929031
           ],
           [
             251000,
-            0.04790061055844819
+            0.08793841454420437
           ],
           [
             253000,
-            0.05284039280254841
+            0.08279658314202068
           ],
           [
             255000,
-            0.043944604783915465
+            0.09015617933668955
           ],
           [
             257000,
-            0.062004344974778226
+            0.09476405427125334
           ],
           [
             259000,
-            0.034190992192004464
+            0.06253829080920997
           ],
           [
             261000,
-            0.06398677283490721
+            0.09673159157277102
           ],
           [
             263000,
-            0.06114797151460464
+            0.10268044016583008
           ],
           [
             265000,
-            0.056954378200505425
+            0.09973055943480202
           ],
           [
             267000,
-            0.04489670978845991
+            0.07422471880743428
           ],
           [
             269000,
-            0.04728583865512035
+            0.07318369233499662
           ],
           [
             271000,
-            0.05449410355095641
+            0.09205953941935008
           ],
           [
             273000,
-            0.055894738324187836
+            0.0824445739469517
           ],
           [
             275000,
-            0.05919451269009153
+            0.09240758976559169
           ],
           [
             277000,
-            0.058771573862763736
+            0.10462613818344496
           ],
           [
             279000,
-            0.055413102911738135
+            0.08852577333915242
           ],
           [
             281000,
-            0.05629817761946676
+            0.1006937911391773
           ],
           [
             283000,
-            0.05625937657187221
+            0.10473391491858727
           ],
           [
             285000,
-            0.06137324801260588
+            0.09042555376863294
           ],
           [
             287000,
-            0.06032054496030519
+            0.08913798077532373
           ],
           [
             289000,
-            0.061653244161421705
+            0.1068385924082293
           ],
           [
             291000,
-            0.04064433931762742
+            0.07957748581599744
           ],
           [
             293000,
-            0.04608607811015559
+            0.0799359529062622
           ],
           [
             295000,
-            0.039720920322425385
+            0.07682386628129204
           ],
           [
             297000,
-            0.04585999083255595
+            0.08009745447032796
           ],
           [
             299000,
-            0.052576889381964836
+            0.08601026450066074
           ],
           [
             301000,
-            0.040200269907076334
+            0.06712687639606786
           ],
           [
             303000,
-            0.0676853787770787
+            0.09832742507520705
           ]
         ],
         "FlatShare": 0.0,
-        "ClippedShare": 0.0
+        "ClippedShare": 0.0,
+        "ShareBasis": "given"
       },
       "Status": {
         "ecg": "ok",
@@ -2659,6 +2671,12 @@
         "rsp": "ok",
         "eda": "ok",
         "emg_cor": "ok"
+      },
+      "ThresholdBasis": {
+        "OnTaskRows": 210000,
+        "OnTaskSeconds": 210.0,
+        "UsedTrim": false,
+        "Rule": "rows inside this file's trim that belong to the baseline or to a task phase other than dr_grid and ct_grid (decoded events); the whole trim when these total under 30 s"
       }
     }
   }

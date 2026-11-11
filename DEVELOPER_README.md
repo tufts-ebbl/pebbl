@@ -1426,7 +1426,7 @@ and `test_urglab_practice.py` item 1 keeps it byte-for-byte the same.
     - the EDA lift gets `floor`, with 2 s of guard each side;
     - `snr` and `ecg_unconfirmed` stay empty in a 180-s file.
 - **One key version per study:** `practice_certification.KEY_VERSIONS =
-  {"sdi": 8, "urglab": 3}`. sdi's key keeps its old shape (no `study`
+  {"sdi": 8, "urglab": 4}`. sdi's key keeps its old shape (no `study`
   field); urglab's has `"study": "urglab"` and `"subjects": {"990": ...,
   "991": ...}`.
 - **Scoring additions, used only by urglab's key:**
@@ -1897,9 +1897,9 @@ and real-data-gets-its-own-scale) and `test_real_data.py`/`test_column_subsets.p
   answer key; made through `practice_certification.py make --study-profile`
   (see "urglab's practice" above).
 - `practice_urglab_machine_qc.json` — physiopipe's own computer marks for
-  those signals (its JSON, unchanged; recomputed for key version 3 with
-  physiopipe b21f82b and urglab profile 21078f4f17b8), with each file's
-  SHA-256, which `make` checks.
+  those signals (its JSON, unchanged; refreshed for key version 4 with
+  physiopipe 6bf462e and urglab profile 284d59d44375, 2026-11-10: same spans,
+  newer Rule texts), with each file's SHA-256, which `make` checks.
 - `practice_report_gui.py` — the practice score window shown after each
   saved practice review, with its "Compare with the answer key" button.
 - `test_urglab_practice.py` — urglab's practice:

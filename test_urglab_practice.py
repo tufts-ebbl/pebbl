@@ -300,7 +300,7 @@ def check_generated(tmp):
                         "--key-copy", os.path.join(tmp, "staff", "urglab_key.json")]) == 0
     key = pc.load_key(pc.key_path_for(practice))
     assert key == pc.load_key(os.path.join(tmp, "staff", "urglab_key.json"))
-    assert key["version"] == pc.KEY_VERSIONS["urglab"] == 3 and pc.key_study(key) == "urglab", key["version"]
+    assert key["version"] == pc.KEY_VERSIONS["urglab"] == 4 and pc.key_study(key) == "urglab", key["version"]
     assert key["seed"] == pu.SEED == 20261108, "version 2: one seed, because the marks are physiopipe's for it"
     computed = pu.load_machine_qc(pu.MACHINE_QC_FILE)
     for subject in pu.SUBJECTS:  # the signals are exactly the ones physiopipe computed its marks for
@@ -351,7 +351,8 @@ def check_generated(tmp):
     with open(REFERENCE, encoding="utf-8") as f:
         ref = json.load(f)
     with open(REFERENCE, "rb") as f:  # LF as physiopipe wrote it; a Windows checkout may have made it CRLF
-        assert hashlib.sha256(f.read().replace(b"\r\n", b"\n")).hexdigest().startswith("ced919006219"), "fixture"
+        # physiopipe's refreshed sidecar (2026-11-10; was ced919006219...)
+        assert hashlib.sha256(f.read().replace(b"\r\n", b"\n")).hexdigest().startswith("75e0615ad6ce"), "fixture"
     for subject, (tsv, df, side) in files.items():
         assert list(side) == list(ref), (subject, list(side))
         assert side["Columns"] == ref["Columns"] and side["SamplingFrequency"] == ref["SamplingFrequency"]
