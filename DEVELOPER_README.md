@@ -1897,9 +1897,10 @@ and real-data-gets-its-own-scale) and `test_real_data.py`/`test_column_subsets.p
   answer key; made through `practice_certification.py make --study-profile`
   (see "urglab's practice" above).
 - `practice_urglab_machine_qc.json` — physiopipe's own computer marks for
-  those signals (its JSON, unchanged; refreshed for key version 4 with
-  physiopipe 6bf462e and urglab profile 284d59d44375, 2026-11-10: same spans,
-  newer Rule texts), with each file's SHA-256, which `make` checks.
+  those signals (its JSON, unchanged; spans and Rule texts as for key
+  version 4, 2026-11-10; refreshed 2026-11-12 with physiopipe f12e001 and
+  urglab profile b7cdb1863300, which changed only its code fingerprints),
+  with each file's SHA-256, which `make` checks.
 - `practice_report_gui.py` — the practice score window shown after each
   saved practice review, with its "Compare with the answer key" button.
 - `test_urglab_practice.py` — urglab's practice:

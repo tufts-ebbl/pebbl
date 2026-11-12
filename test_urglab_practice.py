@@ -351,8 +351,8 @@ def check_generated(tmp):
     with open(REFERENCE, encoding="utf-8") as f:
         ref = json.load(f)
     with open(REFERENCE, "rb") as f:  # LF as physiopipe wrote it; a Windows checkout may have made it CRLF
-        # physiopipe's refreshed sidecar (2026-11-10; was ced919006219...)
-        assert hashlib.sha256(f.read().replace(b"\r\n", b"\n")).hexdigest().startswith("75e0615ad6ce"), "fixture"
+        # physiopipe's refreshed sidecar (2026-11-12, its known-limits code; was 75e0615ad6ce...)
+        assert hashlib.sha256(f.read().replace(b"\r\n", b"\n")).hexdigest().startswith("405863b4a886"), "fixture"
     for subject, (tsv, df, side) in files.items():
         assert list(side) == list(ref), (subject, list(side))
         assert side["Columns"] == ref["Columns"] and side["SamplingFrequency"] == ref["SamplingFrequency"]

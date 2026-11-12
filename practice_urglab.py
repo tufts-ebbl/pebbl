@@ -93,8 +93,8 @@ COLUMNS = ["ecg", "ppg", "rsp", "eda", "emg_cor", "emg_cor_env", "ecg_peaks", "p
 TECHNICAL_DESCRIPTION = "Practice file, simulated by PEBBL (practice_urglab.py): not participant data."
 
 # The study's texts, word for word, from physiopipe's writer-made reference sidecar
-# (fixtures/urglab_reference_sidecar.json: physiopipe 6bf462e, urglab physio c12ac16, profile 284d59d44375;
-# refreshed 2026-11-10, HLU: "Yes, go ahead"). test_urglab_practice.py checks they still match it.
+# (fixtures/urglab_reference_sidecar.json: physiopipe f12e001, urglab physio 7c18216, profile b7cdb1863300;
+# texts as refreshed 2026-11-10 and unchanged on 2026-11-12). test_urglab_practice.py checks they still match it.
 COLUMN_TEXTS = {
     'ecg': ('mV',
         "The heart's electrical signal (ECG), filtered to remove electrical noise from the room. Each sharp "
