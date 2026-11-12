@@ -1,24 +1,24 @@
 {
  "method": "A7, version 3 (after physiopipe's on-task change): physiopipe's MachineQC block for PEBBL's synthetic practice files,",
  "code": {
-  "physiopipe_commit": "6bf462e4e48b052651866c5071c0e4e4fe2f9972",
+  "physiopipe_commit": "f12e00145bb76c5269e7064cdc6183d0bfea26b2",
   "physiopipe_code_sha256": {
    "__init__.py": "d87cc8a6690acfa5a42233ca81c4a6cf56e5de75b2566411822013906f63c0ba",
    "acq.py": "d18c1edbf2f711e2db9e410089f4594d85fef79c134e3d80d0ecb666757e91d7",
-   "ecg.py": "35ccb481cfcea27b8e78e1573a8eb83baa805ade2cef048de86cd5012b363715",
+   "ecg.py": "980d73ad7712cefdea087a74ca59f094f3d1ddd617408c9118ee8e7b7be6ee53",
    "eda.py": "b8708668d78091beb18fd856477ab4abedcf398bf80290da6e056dc0ed0dd397",
    "emg.py": "7eaefb0e8a1ccd4ec6d1565132851a3901cf2cd04077162a2732c96770e95802",
    "filters.py": "3829d3b8397e488ccf74bbdea36e12298c7da7e1dc4356848b8800f4bbe030ca",
    "pass1.py": "3b8b03cb9a75540e83c2cd7f07b5cf6facba4197cf6a05f544fbdc8b581e1219",
    "plugins.py": "864b19417bce52e399ce2c6c431b165e96f60b37068f08755aed0517c47da987",
-   "ppg.py": "0914574da3ca4cf2ae295b2c1086b2a42e386b0a3055b0a6d2d64615d62e7847",
+   "ppg.py": "5c752474f13752f625063c5c51b033086a19b4a3673e207a9624fa66df0c7f33",
    "profile.py": "9e8bdcd535e13bbd6e40cf28fe098cf762d07c692cfeb300920b7207971ecc13",
    "provenance.py": "35db6e23691ee18e047b97460e5234be76615a1f2b68bae331af6a0d7be8d851",
    "records.py": "cabcbd095b48fc0a02e60565c6e3f497b78ea7b028003755b3ffe8644e6b82b9",
    "rsp.py": "6f740fd3ab7b2a1c963b82e20417b04d88ab246b9d0db5bb68054e164a67192f",
-   "writer.py": "998a851120fa22892a8fde2780260cd864d55eae634337e254d96acb801ac65f"
+   "writer.py": "e526f4908be2c31e5d1a95d6c2531a8b236db8109c1d955452ffcb6c7e2b8a9a"
   },
-  "urglab_profile_sha256": "284d59d44375de46f8b0b6d53a842f45b04d62481640c9c2883dfdaf837f48bb"
+  "urglab_profile_sha256": "b7cdb18633008a2051a086801864a7fad03e5d8e96ab1756e229b14c5feda3b1"
  },
  "subjects": {
   "990": {
