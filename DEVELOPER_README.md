@@ -799,7 +799,7 @@ the guide rows on or off (`channel_config.FULL_RANGE_CHANNELS`).
   largest absolute value (about its mean), which fills the row. On the
   planted recording the pops fill it; a 0.3-mV burst reaches about
   two-fifths of their height and a held frown about a sixteenth. Its unit
-  label is COR's.
+  label is COR's (µV for COR stored in mV; see "In µV" below).
 - **Kept in band:** both COR rows (`clamp_display` in their configs) are
   clipped to their own band in the viewer's copy only
   (`physio_io.clamp_display_rows`). MNE's own clipping is one setting for
@@ -809,8 +809,25 @@ the guide rows on or off (`channel_config.FULL_RANGE_CHANNELS`).
 - **Never saved:** it isn't a reviewed channel (`annotation_mode` none);
   a stretch drawn across it is `emg_cor`'s, as on any row. The console
   explains the row (`channel_config.FULL_RANGE_TEXT`).
+- **In µV** (HLU, 2026-11-12): a COR column whose sidecar `Units` is mV is
+  shown in µV on both rows, in Step 2 and Step 3
+  (`physio_io.SHOWN_IN_MICROVOLTS`). COR is tiny in mV (typically
+  0.002-0.02 mV in urglab's practice recordings), and mne_qt_browser rounds
+  the cursor readout and the scale-bar number to 2 decimals, so in mV most
+  of the trace read "0.0 mV". `sidecar_unit_labels` labels it µV and
+  `apply_unit_labels` sets that type's display unit scaling to 1000, MNE's
+  own mechanism, so only the numbers on screen change. The data, the marks
+  and the saved files stay in mV. This is the one exception to "relabel,
+  never rescale". "µV" is never a `SIDECAR_UNIT_LABELS` value, so it only
+  ever labels this conversion.
+- **Step 3's units:** `reconcile.run_stage_c` passes every row on screen to
+  `print_sidecar_banner`, as Step 2 does. Until 2026-11-12 it passed only the
+  reviewed rows, so `emg_cor_full` kept MNE's default for `eog`: µV, with
+  numbers 1,000,000 times the file's.
 - **Tests:** `test_cor_display.py`, on `fixtures/cor_planted_75-140s.npz`
-  (physiopipe's planted COR; origin in `fixtures/README.md`).
+  (physiopipe's planted COR; origin in `fixtures/README.md`). Item 6 checks
+  the µV display in Step 2 and Step 3. It fails if Step 3 goes back to
+  passing only the reviewed rows.
 
 #### RSP as the belt as recorded (`rsp_raw`)
 

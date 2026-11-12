@@ -693,7 +693,7 @@ def run_stage_c(df, sfreq, channel_configs, out_dir, file_stem, source_file,
     for ch_key, counts in diff_summary.items():
         print(f"  - {ch_key}: {counts}")
     print(f"Launching interactive viewer with channels: {list(raw.ch_names)}")
-    print_sidecar_banner(sidecar, channel_configs)
+    print_sidecar_banner(sidecar, full_channel_configs)  # every row's unit, as in Step 2 (the guide and full-range rows too)
     print(f" - Marks agreed by both reviewers need no action.")
     print(f" - Marks unique to only one reviewer are shown separately (auto-colored by")
     print(f"   MNE per label) -- delete any you don't believe; add anything neither caught.")
