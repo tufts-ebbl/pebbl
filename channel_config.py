@@ -652,8 +652,8 @@ GUIDE_CONTEXT_TEXT = "Guide rows are context only: mark only what you see on the
 #       "stim". Shared by SBP and DBP (both genuinely mmHg, so no
 #       per-channel conflict the way "bio" would have been).
 # seeg: the raw breathing row (RAW_ROWS: rsp_raw, the belt as recorded, in volts like rsp). MNE's own
-#       default is raw Volts, 1e3x -> "mV". Set here rather than only from the sidecar's Units, because
-#       Step 3 takes unit labels from the reviewed channels alone.
+#       default is raw Volts, 1e3x -> "mV". Set here as well as from the sidecar's Units (Step 3 took
+#       unit labels from the reviewed channels alone until 2026-11-12; it now takes them from every row).
 for _mne_type, _unit in (("ecg", "mV"), ("resp", "V"), ("bio", "AU"), ("gsr", "µS"), ("stim", "AU"),
                           ("misc", "mmHg"), ("seeg", "V")):
     mne.defaults.DEFAULTS["units"][_mne_type] = _unit

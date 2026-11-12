@@ -19,6 +19,12 @@ row's edge and can't be told apart by height (the render check, HLU
   4. A whole Step 2 session: the row and its opening line are there; the
      saved review is the same as without the row, which is never saved.
   5. Step 3 (reconciliation) shows and clamps it the same way.
+  6. Both COR rows are shown in µV (HLU, 2026-11-12): COR is stored in mV
+     but is tiny there, and the viewer rounds its readout and scale-bar
+     numbers to 2 decimals, so in mV most of it read "0.0 mV". Only the
+     numbers on screen are multiplied by 1000. Step 3 now takes every row's
+     unit, as Step 2 does; before, the full-range row kept MNE's default
+     (µV, with numbers 1,000,000 times the file's).
 
 Run with: annotate_env\\Scripts\\python.exe test_cor_display.py
 """
@@ -39,10 +45,11 @@ import processing_log
 import session_summary_gui
 from annotation_io import combine_with_reference_channels, run_stage_b
 from channel_config import CHANNELS, FULL_RANGE_CHANNELS, FULL_RANGE_TEXT
-from physio_io import (build_raw, clamp_display_rows, compute_scalings, generate_synthetic_demo,
+from physio_io import (SIDECAR_UNIT_LABELS, build_raw, clamp_display_rows, compute_scalings, generate_synthetic_demo,
                        sidecar_unit_labels)
 from reconcile import run_stage_c
 
+ORIGINAL = {k: dict(mne.defaults.DEFAULTS[k]) for k in ("units", "si_units", "scalings")}  # before any session
 HERE = os.path.dirname(os.path.abspath(__file__))
 FIXTURE = os.path.join(HERE, "fixtures", "cor_planted_75-140s.npz")
 BURST, FROWN, POPS = range(3)  # the fixture's events, in its order
@@ -93,7 +100,11 @@ def main():
         no_cor["emg_cor"] = empty
         assert "emg_cor_full" not in combine_with_reference_channels(reviewed, no_cor), why
     units, _ = sidecar_unit_labels({"emg_cor": {"Units": "mV"}}, combine_with_reference_channels(reviewed, df))
-    assert units.get("emg") == "mV" and units.get("eog") == "mV", units
+    assert units.get("emg") == "µV" and units.get("eog") == "µV", "COR in mV is shown in µV, on both rows"
+    units, _ = sidecar_unit_labels({"emg_cor": {"Units": "V"}, "ecg": {"Units": "mV"}},
+                                   combine_with_reference_channels(reviewed, df))
+    assert units == {"emg": "V", "eog": "V", "ecg": "mV"}, ("only COR in mV is converted", units)
+    assert "µV" not in SIDECAR_UNIT_LABELS.values(), "µV must only ever label the mV-to-µV conversion"
     print("   OK")
 
     print("2-3. Its scale is the largest value; both COR rows stay in their band; nothing else changes...")
@@ -130,6 +141,15 @@ def main():
         seen["rows"] = {ch: on_screen(self, kwargs["scalings"], ch) for ch in self.ch_names
                         if ch in ("emg_cor", "emg_cor_full")}
         seen["ecg"] = row(self, "ecg") if "ecg" in self.ch_names else None
+        seen["units"] = {t: (mne.defaults.DEFAULTS["units"][t], mne.defaults.DEFAULTS["scalings"][t])
+                         for t in ("emg", "eog", "ecg")}
+        seen["scalings"] = dict(kwargs["scalings"])
+
+    def mne_defaults_for(types):
+        """Puts MNE's own unit defaults back, so each session must set COR's units itself."""
+        for t in types:
+            for k in ("units", "si_units", "scalings"):
+                mne.defaults.DEFAULTS[k][t] = ORIGINAL[k][t]
 
     def session(initials, without_row=False):
         out = io.StringIO()
@@ -144,7 +164,9 @@ def main():
             return out.getvalue(), json.load(f)["channels"]
 
     try:
+        mne_defaults_for(("emg", "eog"))
         text, with_row = session("aaa")
+        step2_units = seen["units"]
         names = seen["ch_names"]
         assert names[names.index("emg_cor") + 1] == "emg_cor_full", names
         assert FULL_RANGE_TEXT in text, text[-1500:]
@@ -159,19 +181,36 @@ def main():
 
         print("5. Step 3 (reconciliation) shows and clamps it the same way...")
         seen.clear()
+        mne_defaults_for(("emg", "eog"))
         segments = {"emg_cor": {"mode": "segment", "bad_segments": [[1000, 2000]]}}
         with patch.object(mne.io.RawArray, "plot", capture), \
              patch.object(processing_log, "LOCAL_SNAPSHOT_DIR", tmp), \
              patch.object(session_summary_gui, "show_session_summary", session_summary_gui.headless_decision()), \
              contextlib.redirect_stdout(io.StringIO()) as out:
             run_stage_c(df.copy(), sfreq, {"emg_cor": CHANNELS["emg_cor"]}, tmp, "sub-999_ses-run1_task-planted",
-                        "planted", segments, segments, "aaa", "bbb", reconciler="hlu")
+                        "planted", segments, segments, "aaa", "bbb", reconciler="hlu", sidecar=sidecar)
+        step3_units = seen["units"]
         names = seen["ch_names"]
         assert names[names.index("emg_cor") + 1] == "emg_cor_full", names
         assert FULL_RANGE_TEXT in out.getvalue()
         assert set(seen["rows"]) == {"emg_cor", "emg_cor_full"}
         assert all(np.abs(shown).max() <= BAND for shown in seen["rows"].values())
         print("   OK")
+
+        print("6. Both COR rows are shown in µV, in Step 2 and in Step 3; ECG stays in mV...")
+        for step, shown in (("Step 2", step2_units), ("Step 3", step3_units)):
+            assert shown["emg"] == ("µV", 1000.0) and shown["eog"] == ("µV", 1000.0), (step, shown)
+            assert shown["ecg"] == ("mV", 1.0), (step, shown)
+        # The scale bar's number is twice the row's scale times the unit factor (mne_qt_browser), rounded to 2
+        # decimals; the cursor readout is the value times the factor, rounded the same way.
+        fine_bar_mv = 2 * seen["scalings"]["emg"]
+        quiet_mv = float(np.percentile(np.abs(cor - cor.mean()), 75))
+        assert round(fine_bar_mv, 2) < 0.1 and round(quiet_mv, 2) == 0.0, "in mV the numbers were unreadable"
+        assert round(fine_bar_mv * 1000, 2) >= 1 and round(quiet_mv * 1000, 2) > 0, "in µV they read"
+        assert np.array_equal(df["emg_cor"].to_numpy(), cor), "the data stay in mV"
+        print(f"   OK: emg_cor's scale bar reads {fine_bar_mv * 1000:.2f} µV (was {round(fine_bar_mv, 2)} mV); "
+              f"quiet COR reads about {quiet_mv * 1000:.2f} µV (was {round(quiet_mv, 2)} mV)")
+        mne_defaults_for(("emg", "eog"))
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

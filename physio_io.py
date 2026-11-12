@@ -567,6 +567,18 @@ Display labels for the new sidecar's per-column Units (sidecar plan Phase
 DEFAULTS override). "boolean" (peak columns) is never displayed.
 """
 
+SHOWN_IN_MICROVOLTS = ("emg_cor", "emg_zyg")
+"""
+EMG columns stored in mV that the viewer shows in µV (HLU, 2026-11-12).
+COR is tiny in mV (typically 0.002-0.02 mV), and the viewer rounds its
+cursor readout and scale-bar number to 2 decimals, so in mV most of the
+trace read "0.0 mV". MNE's own display unit scaling multiplies only the
+numbers on screen by 1000; the data, the marks and the saved files stay in
+mV. "µV" is never a SIDECAR_UNIT_LABELS value, so it only ever labels this
+conversion (test_cor_display.py checks that).
+"""
+MICROVOLTS_PER_MILLIVOLT = 1000.0
+
 
 def sidecar_unit_labels(meta, channel_configs):
     """
@@ -574,11 +586,13 @@ def sidecar_unit_labels(meta, channel_configs):
     channels in channel_configs present in the sidecar, plus a list of
     warnings when two channels sharing an MNE type disagree (MNE's unit
     label is per TYPE, so only one can win; the first channel's is kept).
-    Unknown unit strings are skipped with a warning.
+    Unknown unit strings are skipped with a warning. An EMG column in mV
+    is labelled µV (SHOWN_IN_MICROVOLTS; apply_unit_labels scales it).
     """
     units, warnings = {}, []
     for ch_key, cfg in channel_configs.items():
-        entry = (meta or {}).get(cfg.get("full_range_of", ch_key))  # a full-range row has its column's unit
+        column = cfg.get("full_range_of", ch_key)  # a full-range row has its column's unit
+        entry = (meta or {}).get(column)
         if not isinstance(entry, dict) or not entry.get("Units"):
             continue
         raw_unit = str(entry["Units"]).strip()
@@ -589,6 +603,8 @@ def sidecar_unit_labels(meta, channel_configs):
             warnings.append(f"{cfg.get('label', ch_key)}: unknown unit '{raw_unit}' in the sidecar; "
                             f"keeping the default label.")
             continue
+        if column in SHOWN_IN_MICROVOLTS and label == "mV":
+            label = "µV"
         mne_type = cfg["mne_type"]
         if mne_type in units and units[mne_type] != label:
             warnings.append(f"{cfg.get('label', ch_key)}: the sidecar says '{label}' but another channel of the "
@@ -605,11 +621,13 @@ def apply_unit_labels(units):
     never rescaled (channel_config.py's rule). Without the scaling, a type
     channel_config doesn't override (e.g. "emg", whose MNE default multiplies
     by 1e6) would be relabeled but still shown 1,000,000x (checkpoint-2 review).
+    The one exception is "µV", which only labels an EMG column stored in mV
+    (SHOWN_IN_MICROVOLTS): its numbers on screen are multiplied by 1000.
     """
     for mne_type, label in units.items():
         mne.defaults.DEFAULTS["units"][mne_type] = label
         mne.defaults.DEFAULTS["si_units"][mne_type] = label
-        mne.defaults.DEFAULTS["scalings"][mne_type] = 1.0
+        mne.defaults.DEFAULTS["scalings"][mne_type] = MICROVOLTS_PER_MILLIVOLT if label == "µV" else 1.0
 
 
 def sidecar_descriptions(meta, channel_keys):

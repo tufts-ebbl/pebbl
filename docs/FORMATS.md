@@ -70,7 +70,9 @@ Notes:
 
 - **Unit labels.** `Units` values understood (case-insensitive): `mV`, `V`,
   `microsiemens`, `arbitrary`, `mmHg`, `code`; `boolean` is skipped. They
-  relabel the display only; PEBBL never rescales the data.
+  relabel the display only; PEBBL never rescales the data. One exception on
+  screen: `emg_cor` (and `emg_zyg`) in `mV` is shown in µV, with the numbers
+  on screen multiplied by 1000. The data and saved files stay in mV.
 - **MachineQC** pre-marks bad stretches for every fresh segment channel
   that has an entry of its own in `MachineQC.Channels` (`emg_cor` included,
   when the pipeline checks it), PPG's stretches for its `bad_ppg`
