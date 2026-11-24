@@ -10,6 +10,11 @@ practice_report.png, for developers updating the manual. Run from the tool folde
 The RSP pictures show the RSP rule (HLU, 2026-10-05) on synthetic breathing, at times unlike the practice
 recordings': a held breath and clipped tops are bad; a sigh and shallow breathing are real.
 
+The practice score window is an example too (HLU, 2026-11-24): until then it showed run 1's real premature beat
+and scanner noise, which are also urglab's participant 990's, so the public manual gave away certification
+answers. It now shows participant 999, which no practice folder has, with those two items moved to times that no
+practice run in either study uses (check_example_times() stops the capture otherwise).
+
 Then rebuild the PDF and the web page (docs/build_manual_pdf.py) and commit docs/.
 """
 import io
@@ -252,15 +257,63 @@ def shot_summary():
     dlg.close()
 
 
+# The score window's example (HLU, 2026-11-24): participant 999 (no practice folder has it), with run 1's premature
+# beat and scanner noise moved to times no practice run uses, so the picture gives away no certification answer.
+EXAMPLE_SUBJECT = "999"
+EXAMPLE_PVC_AT = 71.0
+EXAMPLE_NOISE = (5.0, 4.0)  # start, length (s)
+CLEAR_SEC = 3.0  # how far the example items stay from every practice item
+
+
+def practice_item_times():
+    """
+    (points, intervals) in seconds: every ECG item of every practice run (sdi runs 1 and 2; urglab 990 and 991),
+    plus sdi run 1's PPG items, among which the example premature beat's small pulse lands. Intervals are
+    (start, length). A plan key that has gone stops the capture (KeyError) rather than being skipped.
+    """
+    import practice_certification as pc
+    import practice_urglab as pu
+    points, intervals = [], []
+    for plan in pc.RUN_PLANS.values():
+        points += [plan["pvc_at"], *plan["spikes_at"], *plan["ecg_missed"], *plan["ecg_on_t"], *plan["ecg_misplaced"]]
+        intervals += [plan["mhd_heavy"], plan["ecg_noise"]]
+    run1 = pc.RUN_PLANS["1"]
+    points += [*run1["ppg_flips"], run1["ppg_dropout_near"], *run1["ppg_missed"], *run1["ppg_on_dicrotic"],
+               *run1["ppg_on_slope"]]
+    for plans in pu.PLANS.values():
+        ecg = plans["ecg"]
+        points += [p for p in (ecg["pvc_at"], *ecg["missed"], *ecg["on_s"], *ecg["on_rebound"], *ecg["on_t"])
+                   if p is not None]
+        intervals += [ecg["flat"], ecg["noise"]]
+    return points, intervals
+
+
+def check_example_times():
+    """Stops the capture if an example item comes within CLEAR_SEC of any practice item (practice_item_times)."""
+    points, intervals = practice_item_times()
+    spans = [(start, start + length) for start, length in intervals]
+    example = [("premature beat", EXAMPLE_PVC_AT, EXAMPLE_PVC_AT),
+               ("scanner noise", EXAMPLE_NOISE[0], EXAMPLE_NOISE[0] + EXAMPLE_NOISE[1])]
+    for name, a, b in example:
+        near = [p for p in points if a - CLEAR_SEC < p < b + CLEAR_SEC]
+        near += [f"{s}-{e}" for s, e in spans if s < b + CLEAR_SEC and e > a - CLEAR_SEC]
+        if near:
+            raise SystemExit(f"The example {name} ({a}-{b} s) is within {CLEAR_SEC} s of practice item(s) at {near}: "
+                             f"move it, or the manual gives away a certification answer.")
+
+
 def shot_report():
-    """The practice score window for a run-1 ECG review whose premature-beat mark was deleted."""
+    """The practice score window for an example run-1 ECG review whose premature-beat mark was deleted."""
     import practice_certification as pc
     import practice_report_gui
+    check_example_times()
+    plan = {**pc.RUN_PLANS["1"], "pvc_at": EXAMPLE_PVC_AT, "ecg_noise": EXAMPLE_NOISE}
     root = tempfile.mkdtemp(prefix="pebbl_practice_shot_")
     try:
-        with contextlib.redirect_stdout(io.StringIO()):
+        with patch.dict(pc.RUN_PLANS, {"1": plan}), contextlib.redirect_stdout(io.StringIO()):
             pc.make(root, seed=7)
         key = pc.load_key(pc.key_path_for(root))
+        key["subject"] = EXAMPLE_SUBJECT  # in memory only: the window says 999, which no practice folder has
         run1 = key["runs"]["1"]
         sub = {"initials": "abc", "channels": {
             "ecg": {"mode": "point", "indices": list(run1["channels"]["ecg"]["true_peaks"])},
@@ -268,7 +321,8 @@ def shot_report():
                                                             for a in run1["channels"]["bad_ecg"]["artifacts"]]}}}
         sub["channels"]["ecg"]["indices"].remove(run1["channels"]["ecg"]["traps"][0]["sample"])
         passed, _results, lines = pc.score_run(key, sub, "1", ["ecg", "bad_ecg"])
-        dlg = practice_report_gui.PracticeReportDialog("Practice participant 990, run 1: ecg", lines, passed)
+        dlg = practice_report_gui.PracticeReportDialog(f"Practice participant {EXAMPLE_SUBJECT}, run 1: ecg", lines,
+                                                       passed)
         dlg.setMinimumSize(640, 400)
         dlg.resize(640, 400)
         dlg.show()
